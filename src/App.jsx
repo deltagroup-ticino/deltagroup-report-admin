@@ -1340,6 +1340,103 @@ function AmministratoriTab({ currentAdmin }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// TAB: CRONOLOGIA (audit log)
+// ═══════════════════════════════════════════════════════════════════
+const ACTION_LABEL = { edit:'Modifica', delete:'Eliminazione', send:'Invio', resend:'Re-invio' };
+const ACTION_COLOR = { edit:'#0b5e8a', delete:'#a32d2d', send:'#1a5c1a', resend:'#854f0b' };
+const ACTION_ICON  = { edit:'✏️', delete:'🗑', send:'📤', resend:'🔁' };
+
+function CronologiaTab() {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filterAdmin, setFilterAdmin] = useState('');
+  const [filterAction, setFilterAction] = useState('');
+  const [search, setSearch] = useState('');
+  const [expandedId, setExpandedId] = useState(null);
+
+  const load = async () => {
+    setLoading(true);
+    const c = await sb();
+    const { data } = await c.from('report_audit_log').select('*').order('created_at', { ascending: false }).limit(1000);
+    if (data) setRows(data);
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, []);
+
+  const admins = useMemo(() => Array.from(new Set(rows.map(r => r.admin_name))).sort(), [rows]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return rows.filter(r => {
+      if (filterAdmin && r.admin_name !== filterAdmin) return false;
+      if (filterAction && r.action !== filterAction) return false;
+      if (q) {
+        const hay = `${r.report_number||''} ${r.report_client_name||''} ${r.admin_name||''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [rows, filterAdmin, filterAction, search]);
+
+  return (
+    <div style={{padding:28,overflowY:'auto',height:'100vh',boxSizing:'border-box'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+        <div><div style={{fontWeight:600,fontSize:18}}>📜 Cronologia azioni</div><div style={{fontSize:13,color:'#888',marginTop:2}}>Ultime {rows.length} azioni · {filtered.length} visibili</div></div>
+        <button onClick={load} style={{padding:'7px 12px',border:'1px solid #ddd',borderRadius:7,background:'#fff',cursor:'pointer',fontSize:12,fontFamily:'inherit'}}>⟳ Aggiorna</button>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 180px 180px',gap:10,marginBottom:14}}>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Cerca N°, cliente o admin…" style={{padding:'9px 12px',border:'1px solid #ddd',borderRadius:8,fontSize:13,boxSizing:'border-box',fontFamily:'inherit'}} />
+        <select value={filterAdmin} onChange={e=>setFilterAdmin(e.target.value)} style={{padding:'9px 12px',border:'1px solid #ddd',borderRadius:8,fontSize:13,boxSizing:'border-box',fontFamily:'inherit',background:'#fff'}}>
+          <option value="">Tutti gli admin</option>
+          {admins.map(a => <option key={a} value={a}>{a}</option>)}
+        </select>
+        <select value={filterAction} onChange={e=>setFilterAction(e.target.value)} style={{padding:'9px 12px',border:'1px solid #ddd',borderRadius:8,fontSize:13,boxSizing:'border-box',fontFamily:'inherit',background:'#fff'}}>
+          <option value="">Tutte le azioni</option>
+          {Object.entries(ACTION_LABEL).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+      </div>
+      {loading && <div style={{textAlign:'center',color:'#888',padding:30}}>Caricamento…</div>}
+      {!loading && filtered.length===0 && <div style={{textAlign:'center',color:'#aaa',padding:30,background:'#fafafa',borderRadius:10,border:'1px solid #eee'}}>Nessuna azione corrispondente.</div>}
+      <div style={{background:'#fff',borderRadius:12,border:'0.5px solid #e0e0e0',overflow:'hidden'}}>
+        {filtered.map((r,i) => {
+          const isOpen = expandedId === r.id;
+          return (
+            <div key={r.id} style={{borderTop:i>0?'0.5px solid #f0f0f0':'none'}}>
+              <div onClick={() => setExpandedId(isOpen?null:r.id)} style={{padding:'11px 16px',cursor:'pointer',display:'flex',alignItems:'center',gap:14,background:isOpen?'#fafafa':'#fff'}}>
+                <span style={{fontSize:18}}>{ACTION_ICON[r.action]||'•'}</span>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13}}>
+                    <span style={{fontWeight:500,color:ACTION_COLOR[r.action]||'#333'}}>{ACTION_LABEL[r.action]||r.action}</span>
+                    <span style={{color:'#888'}}> · rapporto {r.report_number||'—'} {r.report_client_name?`(${r.report_client_name})`:''}</span>
+                  </div>
+                  <div style={{fontSize:11,color:'#888',marginTop:2}}>{r.admin_name} · {fmtDT(r.created_at)}</div>
+                </div>
+                <span style={{fontSize:11,color:'#888',transform:isOpen?'rotate(90deg)':'rotate(0deg)',transition:'transform 0.15s'}}>▶</span>
+              </div>
+              {isOpen && r.details && (
+                <div style={{padding:'10px 16px 14px 48px',background:'#fafafa',borderTop:'0.5px solid #f0f0f0',fontSize:12,color:'#555'}}>
+                  {r.action==='edit' && Array.isArray(r.details.fields) ? (
+                    <div>
+                      {r.details.fields.map((f,j) => (
+                        <div key={j} style={{marginBottom:4}}>
+                          <strong>{f.field}:</strong> <span style={{color:'#999',textDecoration:'line-through'}}>{f.old||'—'}</span> → <span style={{color:GREEN}}>{f.new||'—'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <pre style={{margin:0,fontFamily:'inherit',whiteSpace:'pre-wrap',fontSize:12}}>{JSON.stringify(r.details, null, 2)}</pre>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // TAB: REGOLAMENTO
 // ═══════════════════════════════════════════════════════════════════
 function RegolamentoTab() {
@@ -1466,6 +1563,7 @@ export default function App() {
         {safeTab==='clienti'         && <ClientiTab />}
         {safeTab==='collaboratori'   && isSuper && <CollaboratoriTab currentAdmin={currentAdmin} />}
         {safeTab==='amministratori'  && isSuper && <AmministratoriTab currentAdmin={currentAdmin} />}
+        {safeTab==='cronologia'      && isSuper && <CronologiaTab />}
         {safeTab==='regolamento'     && isSuper && <RegolamentoTab />}
       </div>
     </div>
