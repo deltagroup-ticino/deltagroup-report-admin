@@ -1,10 +1,10 @@
 // ╔══════════════════════════════════════════════════════════════════╗
-// ║  DELTAgroup REPORT — App Admin v1.0                             ║
-// ║  Desktop-first · Verde #1B6B1B · PIN: 101318                    ║
+// ║  DELTAgroup REPORT — App Admin v1.1                             ║
+// ║  Desktop-first · Verde #1B6B1B · Multi-admin                    ║
 // ╚══════════════════════════════════════════════════════════════════╝
 const SUPABASE_URL = "https://golheevkvfqcpgovnawj.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdvbGhlZXZrdmZxY3Bnb3ZuYXdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyNDIwODMsImV4cCI6MjA4OTgxODA4M30.M6S4oxVB112VBj9CZ8ZSFW79Kz7rJGs9tk1qpGhneWI";
-const ADMIN_PIN = '101318';
+const ADMIN_SESSION_KEY = 'drAdminSession';
 const GREEN = '#1B6B1B';
 const GREEN_LIGHT = '#eaf3de';
 
@@ -209,19 +209,22 @@ function AppName({ dark = false }) {
 
 // ── SIDEBAR ───────────────────────────────────────────────────────
 const NAV = [
-  { id:'inbox',        icon:'📥', label:'Inbox' },
-  { id:'spedisci',     icon:'📤', label:'Spedisci' },
-  { id:'clienti',      icon:'🏢', label:'Clienti' },
-  { id:'collaboratori',icon:'👥', label:'Collaboratori' },
-  { id:'regolamento',  icon:'📄', label:'Regolamento' },
+  { id:'inbox',         icon:'📥', label:'Inbox' },
+  { id:'spedisci',      icon:'📤', label:'Spedisci' },
+  { id:'clienti',       icon:'🏢', label:'Clienti' },
+  { id:'collaboratori', icon:'👥', label:'Collaboratori' },
+  { id:'amministratori',icon:'🔑', label:'Amministratori' },
+  { id:'regolamento',   icon:'📄', label:'Regolamento' },
 ];
 
-function Sidebar({ active, onNav, onLogout }) {
+function Sidebar({ active, onNav, onLogout, adminName }) {
   return (
     <div style={{width:200,background:'#0f3d0f',display:'flex',flexDirection:'column',height:'100vh',flexShrink:0}}>
       <div style={{padding:'18px 16px 14px',borderBottom:'1px solid rgba(255,255,255,0.1)'}}>
         <AppName />
-        <div style={{fontSize:10,color:'rgba(255,255,255,0.45)',marginTop:5}}>Pannello Amministratore</div>
+        <div style={{fontSize:10,color:'rgba(255,255,255,0.45)',marginTop:5}}>
+          Pannello Amministratore{adminName ? ' ' : ''}<span style={{color:'rgba(255,255,255,0.85)',fontWeight:600}}>{adminName||''}</span>
+        </div>
       </div>
       <nav style={{flex:1,padding:'12px 8px',overflowY:'auto'}}>
         {NAV.map(item => (
@@ -241,14 +244,48 @@ function Sidebar({ active, onNav, onLogout }) {
 // LOGIN
 // ═══════════════════════════════════════════════════════════════════
 function AdminLogin({ onLogin }) {
+  const [admins, setAdmins] = useState([]);
+  const [loadingAdmins, setLoadingAdmins] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [selectedId, setSelectedId] = useState('');
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
-  const ref = useRef(null);
-  useEffect(() => { ref.current?.focus(); }, []);
+  const [submitting, setSubmitting] = useState(false);
+  const pinRef = useRef(null);
 
-  const handleLogin = () => {
-    if (pin === ADMIN_PIN) onLogin();
-    else { setError('PIN non corretto.'); setPin(''); }
+  useEffect(() => {
+    (async () => {
+      try {
+        const c = await sb();
+        const { data, error } = await c.from('report_admins').select('id,admin_name').eq('is_active', true).order('admin_name');
+        if (error) throw error;
+        setAdmins(data || []);
+        if (data && data.length === 1) setSelectedId(data[0].id);
+      } catch(e) {
+        setLoadError('Impossibile caricare gli amministratori.');
+      }
+      setLoadingAdmins(false);
+    })();
+  }, []);
+
+  useEffect(() => { if (selectedId) pinRef.current?.focus(); }, [selectedId]);
+
+  const handleLogin = async () => {
+    if (!selectedId) { setError('Seleziona il tuo nome.'); return; }
+    if (!pin) { setError('Inserisci il PIN.'); return; }
+    setSubmitting(true);
+    try {
+      const c = await sb();
+      const { data, error } = await c.from('report_admins').select('id,admin_name,pin,is_active').eq('id', selectedId).single();
+      if (error || !data) throw new Error('lookup');
+      if (!data.is_active) { setError('Utente disabilitato.'); setPin(''); setSubmitting(false); return; }
+      if (data.pin !== pin) { setError('PIN non corretto.'); setPin(''); setSubmitting(false); return; }
+      await c.from('report_admins').update({ last_login_at: new Date().toISOString() }).eq('id', data.id);
+      onLogin({ id: data.id, admin_name: data.admin_name });
+    } catch(e) {
+      setError('Errore di accesso. Riprova.');
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -262,12 +299,32 @@ function AdminLogin({ onLogin }) {
           <AppName dark />
           <div style={{fontSize:12,color:'#999',marginTop:6}}>Accesso amministratore</div>
         </div>
-        <div style={{marginBottom:12}}>
-          <label style={{fontSize:12,color:'#555',fontWeight:500,display:'block',marginBottom:6}}>PIN amministratore</label>
-          <input ref={ref} type="password" value={pin} onChange={e => setPin(e.target.value)} onKeyDown={e => e.key==='Enter' && handleLogin()} placeholder="••••••" style={{width:'100%',padding:'12px 14px',border:'1px solid #ddd',borderRadius:9,fontSize:18,letterSpacing:6,textAlign:'center',boxSizing:'border-box',fontFamily:'inherit',outline:'none'}} />
-        </div>
-        {error && <div style={{background:'#fcebeb',color:'#a32d2d',padding:'9px 13px',borderRadius:8,fontSize:13,marginBottom:12,textAlign:'center'}}>{error}</div>}
-        <button onClick={handleLogin} style={{width:'100%',padding:13,background:GREEN,color:'#fff',border:'none',borderRadius:10,fontSize:15,fontWeight:500,cursor:'pointer',fontFamily:'inherit'}}>Accedi</button>
+
+        {loadingAdmins ? (
+          <div style={{textAlign:'center',color:'#888',fontSize:13,padding:20}}>Caricamento…</div>
+        ) : loadError ? (
+          <div style={{background:'#fcebeb',color:'#a32d2d',padding:'9px 13px',borderRadius:8,fontSize:13,textAlign:'center'}}>{loadError}</div>
+        ) : admins.length === 0 ? (
+          <div style={{background:'#faeeda',color:'#854f0b',padding:'12px 14px',borderRadius:8,fontSize:13,textAlign:'center'}}>
+            Nessun amministratore configurato. Contatta il responsabile sistema.
+          </div>
+        ) : (
+          <>
+            <div style={{marginBottom:12}}>
+              <label style={{fontSize:12,color:'#555',fontWeight:500,display:'block',marginBottom:6}}>Amministratore</label>
+              <select value={selectedId} onChange={e => { setSelectedId(e.target.value); setError(''); }} style={{width:'100%',padding:'12px 14px',border:'1px solid #ddd',borderRadius:9,fontSize:14,boxSizing:'border-box',fontFamily:'inherit',outline:'none',background:'#fff'}}>
+                <option value="">— Seleziona —</option>
+                {admins.map(a => <option key={a.id} value={a.id}>{a.admin_name}</option>)}
+              </select>
+            </div>
+            <div style={{marginBottom:12}}>
+              <label style={{fontSize:12,color:'#555',fontWeight:500,display:'block',marginBottom:6}}>PIN amministratore</label>
+              <input ref={pinRef} type="password" value={pin} onChange={e => setPin(e.target.value)} onKeyDown={e => e.key==='Enter' && handleLogin()} placeholder="••••••" style={{width:'100%',padding:'12px 14px',border:'1px solid #ddd',borderRadius:9,fontSize:18,letterSpacing:6,textAlign:'center',boxSizing:'border-box',fontFamily:'inherit',outline:'none'}} />
+            </div>
+            {error && <div style={{background:'#fcebeb',color:'#a32d2d',padding:'9px 13px',borderRadius:8,fontSize:13,marginBottom:12,textAlign:'center'}}>{error}</div>}
+            <button onClick={handleLogin} disabled={submitting} style={{width:'100%',padding:13,background:GREEN,color:'#fff',border:'none',borderRadius:10,fontSize:15,fontWeight:500,cursor:'pointer',fontFamily:'inherit',opacity:submitting?0.6:1}}>{submitting?'Accesso…':'Accedi'}</button>
+          </>
+        )}
       </div>
     </div>
   );
@@ -391,6 +448,30 @@ function InboxTab() {
     const doc = await generateReportPDF(report);
     const blob = doc.output('blob');
     window.open(URL.createObjectURL(blob), '_blank');
+  };
+
+  const deleteReport = async (report) => {
+    const typed = prompt(
+      `ELIMINAZIONE DEFINITIVA\n\n`+
+      `Rapporto N° ${report.report_number}\n`+
+      `Cliente: ${report.client_name||'—'}\n`+
+      `Data: ${fromISO(report.service_date)}\n`+
+      `Da: ${report.submitted_by_name||'—'}\n\n`+
+      `Questa operazione è IRREVERSIBILE: il rapporto e tutta la sua cronologia verranno cancellati dal database.\n\n`+
+      `Digita ELIMINA (in maiuscolo) per confermare:`
+    );
+    if (typed === null) return;
+    if (typed !== 'ELIMINA') { alert('Eliminazione annullata: testo di conferma non corretto.'); return; }
+    try {
+      const c = await sb();
+      await c.from('report_revisions').delete().eq('report_id', report.id);
+      const { error } = await c.from('dr_reports').delete().eq('id', report.id);
+      if (error) throw error;
+      setDayReports(prev => prev.filter(r => r.id !== report.id));
+      setSelectedReport(null);
+      setEditMode(false);
+      loadDays();
+    } catch(e) { console.error(e); alert('Errore durante l’eliminazione. Riprova.'); }
   };
 
   const dayStatus = (d) => { if(d.submitted>0) return 'error'; if(d.read>0) return 'warning'; return 'ok'; };
@@ -587,6 +668,14 @@ function InboxTab() {
             {selectedReport.status==='sent_to_client' && (
               <div style={{padding:'10px 14px',background:GREEN_LIGHT,borderRadius:9,fontSize:13,color:'#1a5c1a',marginBottom:16}}>
                 ✅ Inviato al cliente il {fmtDT(selectedReport.sent_to_client_at)}
+              </div>
+            )}
+
+            {!editMode && (
+              <div style={{marginBottom:16}}>
+                <button onClick={() => deleteReport(selectedReport)} style={{width:'100%',padding:'10px 14px',background:'#fff',color:'#a32d2d',border:'1px solid #f0c8c8',borderRadius:9,cursor:'pointer',fontSize:13,fontFamily:'inherit',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
+                  🗑 Elimina rapporto (definitivo)
+                </button>
               </div>
             )}
 
@@ -893,6 +982,126 @@ function CollaboratoriTab() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// TAB: AMMINISTRATORI
+// ═══════════════════════════════════════════════════════════════════
+function AmministratoriTab({ currentAdmin }) {
+  const [admins, setAdmins] = useState([]);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    const c = await sb();
+    const { data } = await c.from('report_admins').select('*').order('admin_name');
+    if (data) setAdmins(data);
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, []);
+
+  const genPin = () => String(Math.floor(100000 + Math.random()*900000));
+
+  const addAdmin = async () => {
+    const name = prompt('Nome amministratore (es. POLETTI MARCO):');
+    if (!name) return;
+    const cleanName = name.trim().toUpperCase();
+    if (!cleanName) return;
+    if (admins.some(a => a.admin_name === cleanName)) { alert('Esiste già un amministratore con questo nome.'); return; }
+    setAdding(true);
+    try {
+      const c = await sb();
+      const pin = genPin();
+      const { data, error } = await c.from('report_admins').insert({ admin_name: cleanName, pin, is_active: true }).select().single();
+      if (error) throw error;
+      setAdmins(prev => [...prev, data].sort((a,b) => a.admin_name.localeCompare(b.admin_name)));
+      alert(`Amministratore creato.\n\nNome: ${cleanName}\nPIN: ${pin}\n\nComunica il PIN all'utente: dovrà usarlo al primo accesso.`);
+    } catch(e) { console.error(e); alert('Errore durante la creazione.'); }
+    setAdding(false);
+  };
+
+  const resetPin = async (id, name) => {
+    if (!confirm(`Generare un nuovo PIN per ${name}?`)) return;
+    try {
+      const c = await sb();
+      const pin = genPin();
+      await c.from('report_admins').update({ pin, updated_at: new Date().toISOString() }).eq('id', id);
+      setAdmins(prev => prev.map(a => a.id===id ? {...a, pin} : a));
+      alert(`Nuovo PIN per ${name}: ${pin}`);
+    } catch(e) { console.error(e); alert('Errore.'); }
+  };
+
+  const toggleActive = async (a) => {
+    if (a.id === currentAdmin?.id && a.is_active) { alert('Non puoi disabilitare te stesso.'); return; }
+    try {
+      const c = await sb();
+      await c.from('report_admins').update({ is_active: !a.is_active, updated_at: new Date().toISOString() }).eq('id', a.id);
+      setAdmins(prev => prev.map(x => x.id===a.id ? {...x, is_active: !a.is_active} : x));
+    } catch(e) { console.error(e); alert('Errore.'); }
+  };
+
+  const removeAdmin = async (a) => {
+    if (a.id === currentAdmin?.id) { alert('Non puoi eliminare te stesso.'); return; }
+    const typed = prompt(`Eliminare definitivamente l'amministratore ${a.admin_name}?\n\nDigita ELIMINA per confermare:`);
+    if (typed === null) return;
+    if (typed !== 'ELIMINA') { alert('Eliminazione annullata.'); return; }
+    try {
+      const c = await sb();
+      await c.from('report_admins').delete().eq('id', a.id);
+      setAdmins(prev => prev.filter(x => x.id !== a.id));
+    } catch(e) { console.error(e); alert('Errore.'); }
+  };
+
+  const filtered = admins.filter(a => a.admin_name.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <div style={{padding:28,overflowY:'auto',height:'100vh',boxSizing:'border-box'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
+        <div><div style={{fontWeight:600,fontSize:18}}>🔑 Amministratori</div><div style={{fontSize:13,color:'#888',marginTop:2}}>Gestione accessi al pannello · {admins.length} totali</div></div>
+        <button onClick={addAdmin} disabled={adding} style={{padding:'9px 16px',background:GREEN,color:'#fff',border:'none',borderRadius:9,cursor:'pointer',fontSize:13,fontWeight:500,fontFamily:'inherit'}}>
+          {adding?'Creazione…':'+ Aggiungi amministratore'}
+        </button>
+      </div>
+      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Cerca amministratore…" style={{width:'100%',padding:'10px 13px',border:'1px solid #ddd',borderRadius:9,fontSize:14,marginBottom:14,boxSizing:'border-box',fontFamily:'inherit'}} />
+      {loading && <div style={{textAlign:'center',color:'#888',padding:30}}>Caricamento…</div>}
+      <div style={{background:'#fff',borderRadius:12,border:'0.5px solid #e0e0e0',overflow:'hidden'}}>
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+          <thead>
+            <tr style={{background:'#f5f5f5'}}>
+              {['Amministratore','PIN','Ultimo accesso','Stato','Azioni'].map(h => (
+                <th key={h} style={{padding:'10px 14px',textAlign:'left',fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:0.5}}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((a,i) => (
+              <tr key={a.id} style={{borderTop:i>0?'0.5px solid #f0f0f0':'none'}}>
+                <td style={{padding:'11px 14px',fontWeight:500}}>
+                  {a.admin_name}
+                  {a.id===currentAdmin?.id && <span style={{marginLeft:8,fontSize:10,padding:'2px 6px',background:GREEN_LIGHT,color:'#1a5c1a',borderRadius:4}}>tu</span>}
+                </td>
+                <td style={{padding:'11px 14px',fontFamily:'monospace',fontSize:14,color:GREEN,fontWeight:600}}>{a.pin}</td>
+                <td style={{padding:'11px 14px',fontSize:12,color:'#888'}}>{a.last_login_at?fmtDT(a.last_login_at):'— Mai'}</td>
+                <td style={{padding:'11px 14px'}}>{a.is_active?<span style={{color:GREEN,fontWeight:500}}>● Attivo</span>:<span style={{color:'#999'}}>○ Disabilitato</span>}</td>
+                <td style={{padding:'11px 14px'}}>
+                  <div style={{display:'flex',gap:6}}>
+                    <button onClick={() => toggleActive(a)} disabled={a.id===currentAdmin?.id} style={{padding:'4px 10px',border:`1px solid ${a.is_active?'#ffcccc':'#ccffcc'}`,borderRadius:6,background:'#fff',cursor:a.id===currentAdmin?.id?'not-allowed':'pointer',fontSize:11,color:a.is_active?'#cc0000':GREEN,fontFamily:'inherit',opacity:a.id===currentAdmin?.id?0.4:1}}>
+                      {a.is_active?'Disabilita':'Abilita'}
+                    </button>
+                    <button onClick={() => resetPin(a.id,a.admin_name)} style={{padding:'4px 10px',border:'1px solid #ddd',borderRadius:6,background:'#fff',cursor:'pointer',fontSize:11,fontFamily:'inherit'}}>Reset PIN</button>
+                    <button onClick={() => removeAdmin(a)} disabled={a.id===currentAdmin?.id} style={{padding:'4px 10px',border:'1px solid #f0c8c8',borderRadius:6,background:'#fff',color:'#a32d2d',cursor:a.id===currentAdmin?.id?'not-allowed':'pointer',fontSize:11,fontFamily:'inherit',opacity:a.id===currentAdmin?.id?0.4:1}}>Elimina</button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {filtered.length===0 && !loading && <div style={{textAlign:'center',color:'#aaa',padding:30}}>Nessun amministratore trovato.</div>}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // TAB: REGOLAMENTO
 // ═══════════════════════════════════════════════════════════════════
 function RegolamentoTab() {
@@ -937,20 +1146,37 @@ function RegolamentoTab() {
 // APP ROOT
 // ═══════════════════════════════════════════════════════════════════
 export default function App() {
-  const [loggedIn, setLoggedIn] = useState(false);
+  const [currentAdmin, setCurrentAdmin] = useState(() => {
+    try {
+      const s = JSON.parse(localStorage.getItem(ADMIN_SESSION_KEY));
+      if (s && s.id && s.admin_name) return { id: s.id, admin_name: s.admin_name };
+    } catch {}
+    return null;
+  });
   const [activeTab, setActiveTab] = useState('inbox');
 
-  if (!loggedIn) return <AdminLogin onLogin={() => setLoggedIn(true)} />;
+  const handleLogin = (admin) => {
+    localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ id: admin.id, admin_name: admin.admin_name, savedAt: Date.now() }));
+    setCurrentAdmin(admin);
+  };
+  const handleLogout = () => {
+    localStorage.removeItem(ADMIN_SESSION_KEY);
+    setCurrentAdmin(null);
+    setActiveTab('inbox');
+  };
+
+  if (!currentAdmin) return <AdminLogin onLogin={handleLogin} />;
 
   return (
     <div style={{display:'flex',height:'100vh',overflow:'hidden',fontFamily:'-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'}}>
-      <Sidebar active={activeTab} onNav={setActiveTab} onLogout={() => setLoggedIn(false)} />
+      <Sidebar active={activeTab} onNav={setActiveTab} onLogout={handleLogout} adminName={currentAdmin.admin_name} />
       <div style={{flex:1,overflow:'hidden'}}>
-        {activeTab==='inbox'          && <InboxTab />}
-        {activeTab==='spedisci'       && <SpedisciTab />}
-        {activeTab==='clienti'        && <ClientiTab />}
-        {activeTab==='collaboratori'  && <CollaboratoriTab />}
-        {activeTab==='regolamento'    && <RegolamentoTab />}
+        {activeTab==='inbox'           && <InboxTab />}
+        {activeTab==='spedisci'        && <SpedisciTab />}
+        {activeTab==='clienti'         && <ClientiTab />}
+        {activeTab==='collaboratori'   && <CollaboratoriTab />}
+        {activeTab==='amministratori'  && <AmministratoriTab currentAdmin={currentAdmin} />}
+        {activeTab==='regolamento'     && <RegolamentoTab />}
       </div>
     </div>
   );
