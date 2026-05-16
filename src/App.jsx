@@ -5,6 +5,7 @@
 const SUPABASE_URL = "https://golheevkvfqcpgovnawj.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdvbGhlZXZrdmZxY3Bnb3ZuYXdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyNDIwODMsImV4cCI6MjA4OTgxODA4M30.M6S4oxVB112VBj9CZ8ZSFW79Kz7rJGs9tk1qpGhneWI";
 const ADMIN_SESSION_KEY = 'drAdminSession';
+const ADMIN_SESSION_DAYS = 30;
 const GREEN = '#1B6B1B';
 const GREEN_LIGHT = '#eaf3de';
 
@@ -1326,7 +1327,12 @@ export default function App() {
   const [currentAdmin, setCurrentAdmin] = useState(() => {
     try {
       const s = JSON.parse(localStorage.getItem(ADMIN_SESSION_KEY));
-      if (s && s.id && s.admin_name) return { id: s.id, admin_name: s.admin_name };
+      if (!s || !s.id || !s.admin_name) return null;
+      if (s.savedAt && Date.now() - s.savedAt > ADMIN_SESSION_DAYS * 24 * 60 * 60 * 1000) {
+        localStorage.removeItem(ADMIN_SESSION_KEY);
+        return null;
+      }
+      return { id: s.id, admin_name: s.admin_name };
     } catch {}
     return null;
   });
