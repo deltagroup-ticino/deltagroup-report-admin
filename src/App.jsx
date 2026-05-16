@@ -646,6 +646,53 @@ function AdminLogin({ onLogin }) {
 // ═══════════════════════════════════════════════════════════════════
 // TAB: INBOX
 // ═══════════════════════════════════════════════════════════════════
+function DayRow({ date, stats, isSelected, isToday, status, onClick }) {
+  const d = new Date(date+'T12:00:00');
+  const [hover, setHover] = useState(false);
+  const bg = isSelected ? T.c.greenLight : (hover ? T.c.greenSoft : T.c.surface);
+  return (
+    <div onClick={onClick} onMouseEnter={()=>setHover(true)} onMouseLeave={()=>setHover(false)} style={{padding:'11px 14px',cursor:'pointer',borderBottom:`1px solid ${T.c.border}`,background:bg,display:'flex',alignItems:'center',gap:12,transition:'background 0.1s',position:'relative'}}>
+      {isSelected && <span style={{position:'absolute',left:0,top:0,bottom:0,width:3,background:T.c.green}} />}
+      <div style={{textAlign:'center',minWidth:36}}>
+        <div style={{fontSize:T.f.h+2,fontWeight:600,lineHeight:1,color:isSelected?T.c.green:T.c.text}}>{d.getDate()}</div>
+        <div style={{fontSize:T.f.xs-1,color:T.c.textFaint,marginTop:2,textTransform:'uppercase',letterSpacing:0.5}}>{MONTHS_SHORT[d.getMonth()]}</div>
+      </div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:T.f.md,fontWeight:isToday?600:500,color:T.c.text}}>{isToday?'Oggi':DAYS_SHORT[d.getDay()]+' '+d.getDate()+' '+MONTHS_SHORT[d.getMonth()]}</div>
+        <div style={{fontSize:T.f.xs,color:T.c.textMuted,marginTop:2}}>
+          {stats.total} {stats.total===1?'rapporto':'rapporti'}{stats.submitted>0?` · ${stats.submitted} non letti`:stats.read>0?` · ${stats.read} da inviare`:' · tutti inviati'}
+        </div>
+        {stats.late>0 && <span style={{fontSize:T.f.xs-1,background:T.c.warningBg,color:T.c.warningText,padding:'1px 6px',borderRadius:3,marginTop:4,display:'inline-block',border:`1px solid ${T.c.warningBorder}`}}>+{stats.late} ritardo</span>}
+      </div>
+      <div>
+        {status==='error' && <div title="Non letti" style={{width:10,height:10,borderRadius:'50%',background:T.c.danger}} />}
+        {status==='warning' && <div title="Da inviare" style={{width:10,height:10,borderRadius:'50%',background:T.c.warning}} />}
+        {status==='ok' && <span title="Tutti inviati" style={{color:T.c.green,display:'inline-flex'}}><I.check size={15} /></span>}
+      </div>
+    </div>
+  );
+}
+
+function ReportRow({ report, isSelected, onClick }) {
+  const [hover, setHover] = useState(false);
+  const accent = report.status==='sent_to_client' ? T.c.green : report.status==='read' ? T.c.warning : T.c.danger;
+  const bg = isSelected ? T.c.greenLight : (hover ? T.c.surfaceHover : T.c.surface);
+  return (
+    <div onClick={onClick} onMouseEnter={()=>setHover(true)} onMouseLeave={()=>setHover(false)} style={{padding:'12px 14px',cursor:'pointer',borderBottom:`1px solid ${T.c.border}`,borderLeft:`3px solid ${accent}`,background:bg,transition:'background 0.1s'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:4,gap:6}}>
+        <div style={{fontWeight:500,fontSize:T.f.md,minWidth:0,color:T.c.text}}>{report.submitted_by_name}</div>
+        <StatusBadge status={report.status} />
+      </div>
+      <div style={{fontSize:T.f.sm,color:T.c.textMuted,marginBottom:6}}>{report.client_name} · {report.address}</div>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6}}>
+        <TypeBadge type={report.report_type} />
+        <div style={{fontSize:T.f.xs-1,color:T.c.textFaint}}>{fmtTime(report.submitted_at)}</div>
+      </div>
+      {report.is_late && <div style={{fontSize:T.f.xs-1,color:T.c.warningText,background:T.c.warningBg,padding:'2px 7px',borderRadius:4,marginTop:6,display:'inline-block',border:`1px solid ${T.c.warningBorder}`}}>Ricevuto in ritardo</div>}
+    </div>
+  );
+}
+
 function InboxTab({ currentAdmin }) {
   const confirmModal = useConfirm();
   const toast = useToast();
@@ -827,33 +874,10 @@ function InboxTab({ currentAdmin }) {
         </div>
         <div style={{flex:1,overflowY:'auto'}}>
           {loading && <div style={{padding:20,textAlign:'center',color:'#888',fontSize:13}}>Caricamento…</div>}
-          {filteredDays.map(([date,stats]) => {
-            const d = new Date(date+'T12:00:00');
-            const isSelected = selectedDay===date;
-            const isToday = date===todayISO();
-            const st = dayStatus(stats);
-            return (
-              <div key={date} onClick={() => loadDay(date)} style={{padding:'11px 14px',cursor:'pointer',borderBottom:'0.5px solid #eee',background:isSelected?'#e8f5e8':'#fafafa',display:'flex',alignItems:'center',gap:12}}>
-                <div style={{textAlign:'center',minWidth:36}}>
-                  <div style={{fontSize:20,fontWeight:600,lineHeight:1,color:isSelected?GREEN:'#111'}}>{d.getDate()}</div>
-                  <div style={{fontSize:10,color:'#888'}}>{MONTHS_SHORT[d.getMonth()]}</div>
-                </div>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:13,fontWeight:isToday?600:400}}>{isToday?'Oggi':DAYS_SHORT[d.getDay()]+' '+d.getDate()+' '+MONTHS_SHORT[d.getMonth()]}</div>
-                  <div style={{fontSize:11,color:'#888'}}>
-                    {stats.total} rapporti{stats.submitted>0?` \u00B7 ${stats.submitted} non letti`:stats.read>0?` \u00B7 ${stats.read} da inviare`:' \u00B7 tutti inviati'}
-                  </div>
-                  {stats.late>0 && <span style={{fontSize:9,background:'#faeeda',color:'#854f0b',padding:'1px 5px',borderRadius:3}}>+{stats.late} ritardo</span>}
-                </div>
-                <div>
-                  {st==='error' && <div style={{width:10,height:10,borderRadius:'50%',background:'#e24b4a'}} />}
-                  {st==='warning' && <div style={{width:10,height:10,borderRadius:'50%',background:'#ef9f27'}} />}
-                  {st==='ok' && <span style={{fontSize:14,color:GREEN}}>✓</span>}
-                </div>
-              </div>
-            );
-          })}
-          {!loading && filteredDays.length===0 && <div style={{padding:20,textAlign:'center',color:'#aaa',fontSize:13}}>Nessun dato</div>}
+          {filteredDays.map(([date,stats]) => (
+            <DayRow key={date} date={date} stats={stats} isSelected={selectedDay===date} isToday={date===todayISO()} onClick={() => loadDay(date)} status={dayStatus(stats)} />
+          ))}
+          {!loading && filteredDays.length===0 && <div style={{padding:30,textAlign:'center',color:T.c.textFaint,fontSize:T.f.md}}>Nessun dato</div>}
         </div>
       </div>
 
@@ -869,20 +893,8 @@ function InboxTab({ currentAdmin }) {
             <div style={{flex:1,overflowY:'auto'}}>
               {loadingDay && <div style={{padding:20,textAlign:'center',color:'#888',fontSize:13}}>Caricamento…</div>}
               {dayReports.map(r => (
-                <div key={r.id} onClick={() => openReport(r)} style={{padding:'11px 14px',cursor:'pointer',borderBottom:'0.5px solid #f0f0f0',borderLeft:`3px solid ${r.status==='sent_to_client'?GREEN:r.status==='read'?'#ef9f27':'#e24b4a'}`,background:selectedReport?.id===r.id?'#f5fbf5':'#fff'}}>
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:3,gap:6}}>
-                    <div style={{fontWeight:500,fontSize:13,minWidth:0}}>{r.submitted_by_name}</div>
-                    <StatusBadge status={r.status} />
-                  </div>
-                  <div style={{fontSize:12,color:'#666',marginBottom:4}}>{r.client_name} \u00B7 {r.address}</div>
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6}}>
-                    <TypeBadge type={r.report_type} />
-                    <div style={{fontSize:10,color:'#bbb'}}>{fmtTime(r.submitted_at)}</div>
-                  </div>
-                  {r.is_late && <div style={{fontSize:10,color:'#854f0b',background:'#faeeda',padding:'1px 6px',borderRadius:4,marginTop:4,display:'inline-block'}}>Ricevuto in ritardo</div>}
-                </div>
-              ))}
-            </div>
+                <ReportRow key={r.id} report={r} isSelected={selectedReport?.id===r.id} onClick={() => openReport(r)} />
+              ))}            </div>
           </>
         }
       </div>
