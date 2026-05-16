@@ -276,7 +276,7 @@ function AdminLogin({ onLogin }) {
     (async () => {
       try {
         const c = await sb();
-        const { data, error } = await c.from('report_admins').select('id,admin_name').eq('is_active', true).order('admin_name');
+        const { data, error } = await c.from('report_admins_safe').select('id,admin_name').eq('is_active', true).order('admin_name');
         if (error) throw error;
         setAdmins(data || []);
         if (data && data.length === 1) setSelectedId(data[0].id);
@@ -292,15 +292,17 @@ function AdminLogin({ onLogin }) {
   const handleLogin = async () => {
     if (!selectedId) { setError('Seleziona il tuo nome.'); return; }
     if (!pin) { setError('Inserisci il PIN.'); return; }
+    const adminObj = admins.find(a => a.id === selectedId);
+    if (!adminObj) { setError('Seleziona il tuo nome.'); return; }
     setSubmitting(true);
     try {
       const c = await sb();
-      const { data, error } = await c.from('report_admins').select('id,admin_name,pin,is_active').eq('id', selectedId).single();
-      if (error || !data) throw new Error('lookup');
-      if (!data.is_active) { setError('Utente disabilitato.'); setPin(''); setSubmitting(false); return; }
-      if (data.pin !== pin) { setError('PIN non corretto.'); setPin(''); setSubmitting(false); return; }
-      await c.from('report_admins').update({ last_login_at: new Date().toISOString() }).eq('id', data.id);
-      onLogin({ id: data.id, admin_name: data.admin_name });
+      const { data, error } = await c.rpc('verify_admin_login', { p_admin_name: adminObj.admin_name, p_pin: pin });
+      if (error) throw error;
+      if (!data || data.length === 0) { setError('PIN non corretto o utente disabilitato.'); setPin(''); setSubmitting(false); return; }
+      const admin = data[0];
+      await c.rpc('admin_touch_last_login', { p_admin_id: admin.id });
+      onLogin({ id: admin.id, admin_name: admin.admin_name });
     } catch(e) {
       setError('Errore di accesso. Riprova.');
       setSubmitting(false);
@@ -1202,7 +1204,7 @@ function AmministratoriTab({ currentAdmin }) {
   const load = async () => {
     setLoading(true);
     const c = await sb();
-    const { data } = await c.from('report_admins').select('*').order('admin_name');
+    const { data } = await c.from('report_admins_safe').select('*').order('admin_name');
     if (data) setAdmins(data);
     setLoading(false);
   };
@@ -1220,10 +1222,11 @@ function AmministratoriTab({ currentAdmin }) {
     try {
       const c = await sb();
       const pin = genPin();
-      const { data, error } = await c.from('report_admins').insert({ admin_name: cleanName, pin, is_active: true }).select().single();
+      const { data, error } = await c.rpc('create_admin', { p_admin_name: cleanName, p_pin: pin });
       if (error) throw error;
-      setAdmins(prev => [...prev, data].sort((a,b) => a.admin_name.localeCompare(b.admin_name)));
-      alert(`Amministratore creato.\n\nNome: ${cleanName}\nPIN: ${pin}\n\nComunica il PIN all'utente: dovrà usarlo al primo accesso.`);
+      const created = Array.isArray(data) ? data[0] : data;
+      if (created) setAdmins(prev => [...prev, created].sort((a,b) => a.admin_name.localeCompare(b.admin_name)));
+      alert(`Amministratore creato.\n\nNome: ${cleanName}\nPIN: ${pin}\n\nComunica il PIN all'utente: dovrà usarlo al primo accesso.\nQuesto PIN non sarà più visibile dopo questa schermata.`);
     } catch(e) { console.error(e); alert('Errore durante la creazione.'); }
     setAdding(false);
   };
@@ -1233,9 +1236,9 @@ function AmministratoriTab({ currentAdmin }) {
     try {
       const c = await sb();
       const pin = genPin();
-      await c.from('report_admins').update({ pin, updated_at: new Date().toISOString() }).eq('id', id);
-      setAdmins(prev => prev.map(a => a.id===id ? {...a, pin} : a));
-      alert(`Nuovo PIN per ${name}: ${pin}`);
+      const { error } = await c.rpc('reset_admin_pin', { p_admin_id: id, p_new_pin: pin });
+      if (error) throw error;
+      alert(`Nuovo PIN per ${name}: ${pin}\n\nComunicalo all'utente. Non sarà più visibile dopo questa schermata.`);
     } catch(e) { console.error(e); alert('Errore.'); }
   };
 
@@ -1243,7 +1246,8 @@ function AmministratoriTab({ currentAdmin }) {
     if (a.id === currentAdmin?.id && a.is_active) { alert('Non puoi disabilitare te stesso.'); return; }
     try {
       const c = await sb();
-      await c.from('report_admins').update({ is_active: !a.is_active, updated_at: new Date().toISOString() }).eq('id', a.id);
+      const { error } = await c.rpc('set_admin_active', { p_admin_id: a.id, p_is_active: !a.is_active });
+      if (error) throw error;
       setAdmins(prev => prev.map(x => x.id===a.id ? {...x, is_active: !a.is_active} : x));
     } catch(e) { console.error(e); alert('Errore.'); }
   };
@@ -1255,7 +1259,8 @@ function AmministratoriTab({ currentAdmin }) {
     if (typed !== 'ELIMINA') { alert('Eliminazione annullata.'); return; }
     try {
       const c = await sb();
-      await c.from('report_admins').delete().eq('id', a.id);
+      const { error } = await c.rpc('delete_admin', { p_admin_id: a.id });
+      if (error) throw error;
       setAdmins(prev => prev.filter(x => x.id !== a.id));
     } catch(e) { console.error(e); alert('Errore.'); }
   };
@@ -1288,7 +1293,7 @@ function AmministratoriTab({ currentAdmin }) {
                   {a.admin_name}
                   {a.id===currentAdmin?.id && <span style={{marginLeft:8,fontSize:10,padding:'2px 6px',background:GREEN_LIGHT,color:'#1a5c1a',borderRadius:4}}>tu</span>}
                 </td>
-                <td style={{padding:'11px 14px',fontFamily:'monospace',fontSize:14,color:GREEN,fontWeight:600}}>{a.pin}</td>
+                <td style={{padding:'11px 14px',fontSize:11,color:'#888',fontStyle:'italic'}}>•••••• <span style={{fontSize:10}}>(non visualizzabile)</span></td>
                 <td style={{padding:'11px 14px',fontSize:12,color:'#888'}}>{a.last_login_at?fmtDT(a.last_login_at):'— Mai'}</td>
                 <td style={{padding:'11px 14px'}}>{a.is_active?<span style={{color:GREEN,fontWeight:500}}>● Attivo</span>:<span style={{color:'#999'}}>○ Disabilitato</span>}</td>
                 <td style={{padding:'11px 14px'}}>
