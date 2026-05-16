@@ -601,6 +601,8 @@ function AdminLogin({ onLogin }) {
 // TAB: INBOX
 // ═══════════════════════════════════════════════════════════════════
 function InboxTab({ currentAdmin }) {
+  const confirmModal = useConfirm();
+  const toast = useToast();
   const [days, setDays] = useState([]);
   const [selectedDay, setSelectedDay] = useState(null);
   const [dayReports, setDayReports] = useState([]);
@@ -713,11 +715,13 @@ function InboxTab({ currentAdmin }) {
         window.open(`mailto:${email}?subject=${subject}&body=${body}`);
       }
       if (shareAborted) { setSendingId(null); return; }
-      const confirmed = window.confirm(
-        `Hai effettivamente inviato il rapporto N° ${report.report_number} a ${report.client_name||'cliente'}?\n\n`+
-        `Conferma SOLO se l'email è stata spedita al cliente.\n`+
-        `In caso contrario il rapporto resterà come "Da inviare".`
-      );
+      const confirmed = await confirmModal({
+        title: 'Conferma invio al cliente',
+        message: `Hai effettivamente inviato il rapporto N° ${report.report_number} a ${report.client_name||'cliente'}?\n\nConferma SOLO se l'email è stata spedita al cliente.\nIn caso contrario il rapporto resterà come "Da inviare".`,
+        confirmLabel: 'Sì, segna come inviato',
+        cancelLabel: 'No, riprovo dopo',
+        tone: 'info',
+      });
       if (!confirmed) { setSendingId(null); return; }
       const c = await sb();
       const sentAt = new Date().toISOString();
@@ -726,7 +730,8 @@ function InboxTab({ currentAdmin }) {
       setSelectedReport(r => ({...r,status:'sent_to_client',sent_to_client_at:sentAt}));
       setDayReports(prev => prev.map(r => r.id===report.id ? {...r,status:'sent_to_client',sent_to_client_at:sentAt} : r));
       loadDays();
-    } catch(e) { console.error(e); alert('Errore durante la preparazione del PDF.'); }
+      toast.success(`Rapporto ${report.report_number} segnato come inviato.`);
+    } catch(e) { console.error(e); toast.error('Errore durante la preparazione del PDF.'); }
     setSendingId(null);
   };
 
@@ -739,9 +744,15 @@ function InboxTab({ currentAdmin }) {
   const deleteReport = async (report) => {
     const isSuper = !!currentAdmin?.is_super;
     const intro = isSuper
-      ? `Spostare nel cestino il rapporto N° ${report.report_number}?\n\nIl rapporto verrà nascosto da Inbox/Spedisci e sarà visibile solo nella sezione Cestino (super-admin). Potrai ripristinarlo o eliminarlo definitivamente in seguito.`
-      : `Spostare nel cestino il rapporto N° ${report.report_number}?\n\nIl rapporto verrà nascosto da Inbox/Spedisci. Solo un super-admin potrà ripristinarlo o eliminarlo definitivamente.`;
-    if (!confirm(intro + `\n\nCliente: ${report.client_name||'—'} · Data: ${fromISO(report.service_date)}`)) return;
+      ? `Il rapporto verrà nascosto da Inbox/Spedisci e sarà visibile solo nella sezione Cestino. Potrai ripristinarlo o eliminarlo definitivamente in seguito.`
+      : `Il rapporto verrà nascosto da Inbox/Spedisci. Solo un super-admin potrà ripristinarlo o eliminarlo definitivamente.`;
+    const ok = await confirmModal({
+      title: `Spostare nel cestino il rapporto ${report.report_number}?`,
+      message: `${intro}\n\nCliente: ${report.client_name||'—'} · Data: ${fromISO(report.service_date)}`,
+      confirmLabel: 'Sposta nel cestino',
+      tone: 'warning',
+    });
+    if (!ok) return;
     try {
       const c = await sb();
       const { error } = await c.rpc('soft_delete_report', { p_token: currentAdmin.token, p_report_id: report.id });
@@ -751,7 +762,8 @@ function InboxTab({ currentAdmin }) {
       setSelectedReport(null);
       setEditMode(false);
       loadDays();
-    } catch(e) { console.error(e); alert('Errore durante l’eliminazione. Riprova.'); }
+      toast.success(`Rapporto ${report.report_number} spostato nel cestino.`);
+    } catch(e) { console.error(e); toast.error('Errore durante l’eliminazione. Riprova.'); }
   };
 
   const dayStatus = (d) => { if(d.submitted>0) return 'error'; if(d.read>0) return 'warning'; return 'ok'; };
@@ -981,6 +993,8 @@ function InboxTab({ currentAdmin }) {
 // TAB: SPEDISCI
 // ═══════════════════════════════════════════════════════════════════
 function SpedisciTab({ currentAdmin }) {
+  const confirmModal = useConfirm();
+  const toast = useToast();
   const [view, setView] = useState('pending');
   const [reports, setReports] = useState([]);
   const [clients, setClients] = useState([]);
@@ -1072,11 +1086,13 @@ function SpedisciTab({ currentAdmin }) {
         window.open(`mailto:${email}?subject=${subject}&body=${body}`);
       }
       if (shareAborted) { setSending(null); return; }
-      const confirmed = window.confirm(
-        `Hai effettivamente inviato i ${toSend.length} rapporto/i a ${clientName}?\n\n`+
-        `Conferma SOLO se l'email è stata spedita al cliente.\n`+
-        `In caso contrario i rapporti resteranno nella sezione Spedisci.`
-      );
+      const confirmed = await confirmModal({
+        title: 'Conferma invio al cliente',
+        message: `Hai effettivamente inviato i ${toSend.length} rapporto/i a ${clientName}?\n\nConferma SOLO se l'email è stata spedita al cliente.\nIn caso contrario i rapporti resteranno nella sezione Spedisci.`,
+        confirmLabel: 'Sì, segna come inviati',
+        cancelLabel: 'No, riprovo dopo',
+        tone: 'info',
+      });
       if (!confirmed) { setSending(null); return; }
       const c = await sb();
       const ids = toSend.map(r => r.id);
@@ -1086,7 +1102,8 @@ function SpedisciTab({ currentAdmin }) {
       }
       setReports(prev => prev.filter(r => !ids.includes(r.id)));
       setArchiveLoaded(false);
-    } catch(e) { console.error(e); alert('Errore durante la preparazione dei PDF.'); }
+      toast.success(`${toSend.length} ${toSend.length===1?'rapporto inviato':'rapporti inviati'} a ${clientName}.`);
+    } catch(e) { console.error(e); toast.error('Errore durante la preparazione dei PDF.'); }
     setSending(null);
   };
 
@@ -1113,7 +1130,7 @@ function SpedisciTab({ currentAdmin }) {
       if (!data) return;
       const doc = await generateReportPDF(data);
       window.open(URL.createObjectURL(doc.output('blob')), '_blank');
-    } catch(e) { console.error(e); alert('Errore apertura PDF.'); }
+    } catch(e) { console.error(e); toast.error('Errore apertura PDF.'); }
   };
 
   const resendArchive = async (rep) => {
@@ -1141,8 +1158,11 @@ function SpedisciTab({ currentAdmin }) {
         const a = document.createElement('a'); a.href=url; a.download=file.name; a.click();
         window.open(`mailto:${email}?subject=${subject}&body=${body}`);
       }
-      if (!resendAborted) await logAudit(currentAdmin, 'resend', full, { recipient: email || null });
-    } catch(e) { console.error(e); alert('Errore durante il re-invio.'); }
+      if (!resendAborted) {
+        await logAudit(currentAdmin, 'resend', full, { recipient: email || null });
+        toast.success(`Rapporto ${full.report_number} re-inviato.`);
+      }
+    } catch(e) { console.error(e); toast.error('Errore durante il re-invio.'); }
     setResending(null);
   };
 
@@ -1271,6 +1291,8 @@ function SpedisciTab({ currentAdmin }) {
 // TAB: CLIENTI
 // ═══════════════════════════════════════════════════════════════════
 function ClientiTab() {
+  const confirmModal = useConfirm();
+  const toast = useToast();
   const [clients, setClients] = useState([]);
   const [search, setSearch] = useState('');
   const [form, setForm] = useState({name:'',email:'',notes:''});
@@ -1294,10 +1316,18 @@ function ClientiTab() {
   };
 
   const del = async (id) => {
-    if (!confirm('Eliminare questo cliente?')) return;
+    const cl = clients.find(c => c.id === id);
+    const ok = await confirmModal({
+      title: 'Eliminare questo cliente?',
+      message: `${cl?.name || ''}\n${cl?.email || ''}`,
+      confirmLabel: 'Elimina',
+      danger: true,
+    });
+    if (!ok) return;
     const c = await sb();
     await c.from('report_clients').delete().eq('id',id);
     setClients(prev => prev.filter(cl => cl.id!==id));
+    toast.success('Cliente eliminato.');
   };
 
   const startEdit = (cl) => { setForm({name:cl.name,email:cl.email,notes:cl.notes||''}); setEditing(cl.id); setShowForm(true); };
@@ -1347,6 +1377,9 @@ function ClientiTab() {
 // ═══════════════════════════════════════════════════════════════════
 function CollaboratoriTab({ currentAdmin }) {
   const isSuper = !!currentAdmin?.is_super;
+  const confirmModal = useConfirm();
+  const alertModal = useAlertModal();
+  const toast = useToast();
   const [collabs, setCollabs] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -1368,20 +1401,30 @@ function CollaboratoriTab({ currentAdmin }) {
   };
 
   const resetPin = async (id, name) => {
-    if (!confirm(`Generare un nuovo PIN per ${name}? Dovrà rifare il primo accesso.`)) return;
+    const ok = await confirmModal({
+      title: `Resettare il PIN di ${name}?`,
+      message: 'Verrà generato un nuovo PIN e il collaboratore dovrà rifare il primo accesso.',
+      confirmLabel: 'Genera nuovo PIN',
+    });
+    if (!ok) return;
     const c = await sb();
     const {data:pin} = await c.rpc('generate_random_pin');
     await c.from('report_collaborators').update({pin,pin_revealed:false,pin_revealed_at:null,regulation_accepted:false,regulation_accepted_at:null,regulation_version:0,updated_at:new Date().toISOString()}).eq('id',id);
     setCollabs(prev => prev.map(cl => cl.id===id ? {...cl,pin,pin_revealed:false,regulation_accepted:false} : cl));
-    alert(`Nuovo PIN per ${name}: ${pin}`);
+    await alertModal({ title: `Nuovo PIN per ${name}`, message: `PIN: ${pin}\n\nComunicalo al collaboratore: lo userà al primo accesso.`, tone: 'success' });
   };
 
   const importFromPlan = async () => {
-    if (!confirm('Importare i nuovi collaboratori attivi dal PLAN?')) return;
+    const ok = await confirmModal({
+      title: 'Importare collaboratori da PLAN?',
+      message: 'Vengono importati i collaboratori attivi presenti su PLAN che non sono ancora qui.',
+      confirmLabel: 'Importa',
+    });
+    if (!ok) return;
     setImporting(true);
     const c = await sb();
     const {data} = await c.rpc('import_agents_to_report');
-    alert(`${data} collaboratori importati.`);
+    toast.success(`${data} ${data===1?'collaboratore importato':'collaboratori importati'}.`);
     load();
     setImporting(false);
   };
@@ -1438,6 +1481,10 @@ function CollaboratoriTab({ currentAdmin }) {
 // ═══════════════════════════════════════════════════════════════════
 function AmministratoriTab({ currentAdmin, onlineAdmins }) {
   const online = onlineAdmins || {};
+  const confirmModal = useConfirm();
+  const alertModal = useAlertModal();
+  const promptModal = usePromptModal();
+  const toast = useToast();
   const [admins, setAdmins] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -1455,11 +1502,15 @@ function AmministratoriTab({ currentAdmin, onlineAdmins }) {
   const genPin = () => String(Math.floor(100000 + Math.random()*900000));
 
   const addAdmin = async () => {
-    const name = prompt('Nome amministratore (es. POLETTI MARCO):');
+    const name = await promptModal({
+      title: 'Nuovo amministratore',
+      message: 'Inserisci il nome completo (es. POLETTI MARCO). Verrà creato come admin standard; potrai promuoverlo a super dopo.',
+      placeholder: 'NOME COGNOME',
+    });
     if (!name) return;
     const cleanName = name.trim().toUpperCase();
     if (!cleanName) return;
-    if (admins.some(a => a.admin_name === cleanName)) { alert('Esiste già un amministratore con questo nome.'); return; }
+    if (admins.some(a => a.admin_name === cleanName)) { await alertModal({ title: 'Nome già usato', message: 'Esiste già un amministratore con questo nome.', tone: 'warning' }); return; }
     setAdding(true);
     try {
       const c = await sb();
@@ -1468,66 +1519,99 @@ function AmministratoriTab({ currentAdmin, onlineAdmins }) {
       if (error) throw error;
       const created = Array.isArray(data) ? data[0] : data;
       if (created) setAdmins(prev => [...prev, created].sort((a,b) => a.admin_name.localeCompare(b.admin_name)));
-      alert(`Amministratore creato.\n\nNome: ${cleanName}\nPIN: ${pin}\n\nComunica il PIN all'utente: dovrà usarlo al primo accesso.\nQuesto PIN non sarà più visibile dopo questa schermata.`);
-    } catch(e) { console.error(e); alert('Errore durante la creazione.'); }
+      await alertModal({
+        title: `${cleanName} aggiunto`,
+        message: `PIN: ${pin}\n\nComunica il PIN all'utente: lo userà al primo accesso.\nQuesto è l'unico momento in cui il PIN è visibile.`,
+        tone: 'success',
+      });
+    } catch(e) { console.error(e); toast.error('Errore durante la creazione.'); }
     setAdding(false);
   };
 
   const resetPin = async (id, name) => {
-    if (!confirm(`Generare un nuovo PIN per ${name}?`)) return;
+    const ok = await confirmModal({
+      title: `Resettare il PIN di ${name}?`,
+      message: 'Verrà generato un nuovo PIN che dovrai comunicargli. Il vecchio non funzionerà più.',
+      confirmLabel: 'Genera nuovo PIN',
+    });
+    if (!ok) return;
     try {
       const c = await sb();
       const pin = genPin();
       const { error } = await c.rpc('reset_admin_pin', { p_token: currentAdmin.token, p_admin_id: id, p_new_pin: pin });
       if (error) throw error;
-      alert(`Nuovo PIN per ${name}: ${pin}\n\nComunicalo all'utente. Non sarà più visibile dopo questa schermata.`);
-    } catch(e) { console.error(e); alert('Errore.'); }
+      await alertModal({
+        title: `Nuovo PIN per ${name}`,
+        message: `PIN: ${pin}\n\nComunicalo all'utente. Questo è l'unico momento in cui è visibile.`,
+        tone: 'success',
+      });
+    } catch(e) { console.error(e); toast.error('Errore durante il reset del PIN.'); }
   };
 
   const toggleActive = async (a) => {
-    if (a.id === currentAdmin?.id && a.is_active) { alert('Non puoi disabilitare te stesso.'); return; }
+    if (a.id === currentAdmin?.id && a.is_active) { toast.warning('Non puoi disabilitare te stesso.'); return; }
     try {
       const c = await sb();
       const { error } = await c.rpc('set_admin_active', { p_token: currentAdmin.token, p_admin_id: a.id, p_is_active: !a.is_active });
       if (error) throw error;
       setAdmins(prev => prev.map(x => x.id===a.id ? {...x, is_active: !a.is_active} : x));
-    } catch(e) { console.error(e); alert('Errore.'); }
+      toast.success(`${a.admin_name} ${!a.is_active ? 'abilitato' : 'disabilitato'}.`);
+    } catch(e) { console.error(e); toast.error('Errore.'); }
   };
 
   const forceLogout = async (a) => {
-    if (a.id === currentAdmin?.id) { alert('Per disconnettere te stesso usa "Esci" in basso a sinistra.'); return; }
-    if (!confirm(`Forzare la disconnessione di ${a.admin_name}?\n\nTutte le sue sessioni attive verranno invalidate. Dovrà rifare il login.`)) return;
+    if (a.id === currentAdmin?.id) { toast.warning('Per disconnettere te stesso usa "Esci" in basso a sinistra.'); return; }
+    const ok = await confirmModal({
+      title: `Forzare la disconnessione di ${a.admin_name}?`,
+      message: 'Tutte le sue sessioni attive verranno invalidate. Dovrà rifare il login.',
+      confirmLabel: 'Disconnetti',
+      tone: 'warning',
+    });
+    if (!ok) return;
     try {
       const c = await sb();
       const { error } = await c.rpc('force_logout_admin', { p_token: currentAdmin.token, p_target_admin_id: a.id });
       if (error) throw error;
-      alert(`${a.admin_name} è stato disconnesso. Sarà sloggato entro 1 minuto.`);
-    } catch(e) { console.error(e); alert('Errore durante la disconnessione.'); }
+      toast.success(`${a.admin_name} è stato disconnesso. Sarà sloggato entro 1 minuto.`);
+    } catch(e) { console.error(e); toast.error('Errore durante la disconnessione.'); }
   };
 
   const toggleSuper = async (a) => {
-    if (a.id === currentAdmin?.id) { alert('Non puoi cambiare il tuo livello.'); return; }
+    if (a.id === currentAdmin?.id) { toast.warning('Non puoi cambiare il tuo livello.'); return; }
     const next = !a.is_super;
-    if (!confirm(`${next?'Rendere':'Togliere'} super-admin ${a.admin_name}?\n\n${next?'Avrà pieno accesso al pannello.':'Avrà accesso solo a Inbox, Spedisci e Clienti.'}`)) return;
+    const ok = await confirmModal({
+      title: next ? `Rendere ${a.admin_name} super-admin?` : `Togliere super-admin a ${a.admin_name}?`,
+      message: next ? 'Avrà pieno accesso al pannello (gestione admin, cestino, cronologia, regolamento).' : 'Avrà accesso solo a Inbox, Spedisci e Clienti.',
+      confirmLabel: next ? 'Rendi super' : 'Togli super',
+      tone: 'warning',
+    });
+    if (!ok) return;
     try {
       const c = await sb();
       const { error } = await c.rpc('set_admin_super', { p_token: currentAdmin.token, p_admin_id: a.id, p_is_super: next });
       if (error) throw error;
       setAdmins(prev => prev.map(x => x.id===a.id ? {...x, is_super: next} : x));
-    } catch(e) { console.error(e); alert('Errore.'); }
+      toast.success(`${a.admin_name} ${next ? 'promosso a super-admin' : 'declassato ad admin standard'}.`);
+    } catch(e) { console.error(e); toast.error('Errore.'); }
   };
 
   const removeAdmin = async (a) => {
-    if (a.id === currentAdmin?.id) { alert('Non puoi eliminare te stesso.'); return; }
-    const typed = prompt(`Eliminare definitivamente l'amministratore ${a.admin_name}?\n\nDigita ELIMINA per confermare:`);
-    if (typed === null) return;
-    if (typed !== 'ELIMINA') { alert('Eliminazione annullata.'); return; }
+    if (a.id === currentAdmin?.id) { toast.warning('Non puoi eliminare te stesso.'); return; }
+    const ok = await confirmModal({
+      title: `Eliminare ${a.admin_name}?`,
+      message: 'L\'utente non potrà più accedere al pannello. Tutte le sue sessioni attive verranno invalidate.\n\nDigita ELIMINA per confermare:',
+      confirmLabel: 'Elimina definitivamente',
+      danger: true,
+      requireText: 'ELIMINA',
+    });
+    if (!ok) return;
     try {
       const c = await sb();
       const { error } = await c.rpc('delete_admin', { p_token: currentAdmin.token, p_admin_id: a.id });
       if (error) throw error;
       setAdmins(prev => prev.filter(x => x.id !== a.id));
-    } catch(e) { console.error(e); alert('Errore.'); }
+      toast.success(`${a.admin_name} eliminato.`);
+    } catch(e) { console.error(e); toast.error('Errore.'); }
   };
 
   const filtered = admins.filter(a => a.admin_name.toLowerCase().includes(search.toLowerCase()));
@@ -1687,6 +1771,8 @@ function CronologiaTab() {
 // TAB: CESTINO (soft-deleted reports, super-only)
 // ═══════════════════════════════════════════════════════════════════
 function CestinoTab({ currentAdmin }) {
+  const confirmModal = useConfirm();
+  const toast = useToast();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -1708,7 +1794,12 @@ function CestinoTab({ currentAdmin }) {
   }, [rows, search]);
 
   const restore = async (r) => {
-    if (!confirm(`Ripristinare il rapporto N° ${r.report_number}?\n\nTornerà visibile in Inbox e Spedisci con lo stato precedente al cestino.`)) return;
+    const ok = await confirmModal({
+      title: `Ripristinare il rapporto ${r.report_number}?`,
+      message: `Tornerà visibile in Inbox e Spedisci con lo stato precedente al cestino.\n\nCliente: ${r.client_name||'—'} · Servizio del ${fromISO(r.service_date)}`,
+      confirmLabel: 'Ripristina',
+    });
+    if (!ok) return;
     setBusyId(r.id);
     try {
       const c = await sb();
@@ -1716,21 +1807,20 @@ function CestinoTab({ currentAdmin }) {
       if (error) throw error;
       await logAudit(currentAdmin, 'restore', r, null);
       setRows(prev => prev.filter(x => x.id !== r.id));
-    } catch(e) { console.error(e); alert('Errore durante il ripristino.'); }
+      toast.success(`Rapporto ${r.report_number} ripristinato.`);
+    } catch(e) { console.error(e); toast.error('Errore durante il ripristino.'); }
     setBusyId(null);
   };
 
   const hardDelete = async (r) => {
-    const typed = prompt(
-      `ELIMINAZIONE DEFINITIVA dal database\n\n`+
-      `Rapporto N° ${r.report_number}\n`+
-      `Cliente: ${r.client_name||'—'}\n`+
-      `Data: ${fromISO(r.service_date)}\n\n`+
-      `Questa operazione è IRREVERSIBILE: il rapporto e tutta la sua cronologia saranno cancellati per sempre.\n\n`+
-      `Digita ELIMINA (in maiuscolo) per confermare:`
-    );
-    if (typed === null) return;
-    if (typed !== 'ELIMINA') { alert('Eliminazione annullata.'); return; }
+    const ok = await confirmModal({
+      title: 'Eliminazione definitiva dal database',
+      message: `Rapporto N° ${r.report_number}\nCliente: ${r.client_name||'—'}\nData: ${fromISO(r.service_date)}\n\nQuesta operazione è IRREVERSIBILE: il rapporto e tutta la sua cronologia saranno cancellati per sempre.\n\nDigita ELIMINA per confermare:`,
+      confirmLabel: 'Elimina per sempre',
+      danger: true,
+      requireText: 'ELIMINA',
+    });
+    if (!ok) return;
     setBusyId(r.id);
     try {
       const c = await sb();
@@ -1738,7 +1828,8 @@ function CestinoTab({ currentAdmin }) {
       const { error } = await c.rpc('hard_delete_report', { p_token: currentAdmin.token, p_report_id: r.id });
       if (error) throw error;
       setRows(prev => prev.filter(x => x.id !== r.id));
-    } catch(e) { console.error(e); alert('Errore.'); }
+      toast.success(`Rapporto ${r.report_number} eliminato definitivamente.`);
+    } catch(e) { console.error(e); toast.error('Errore.'); }
     setBusyId(null);
   };
 
@@ -1776,6 +1867,8 @@ function CestinoTab({ currentAdmin }) {
 // TAB: REGOLAMENTO
 // ═══════════════════════════════════════════════════════════════════
 function RegolamentoTab() {
+  const alertModal = useAlertModal();
+  const confirmModal = useConfirm();
   const [content, setContent] = useState('');
   const [version, setVersion] = useState(1);
   const [saving, setSaving] = useState(false);
@@ -1788,13 +1881,24 @@ function RegolamentoTab() {
   }, []);
 
   const save = async () => {
+    const ok = await confirmModal({
+      title: `Salvare come versione v${version+1}?`,
+      message: 'Crei una nuova versione del regolamento. Per forzare la riaccettazione a tutti i collaboratori dovrai aggiornare REGULATION_VERSION nell\'app collaboratore.',
+      confirmLabel: 'Salva nuova versione',
+      tone: 'warning',
+    });
+    if (!ok) return;
     setSaving(true);
     const c = await sb();
     await c.from('report_regulations').insert({content,version:version+1,updated_by:'Admin',updated_at:new Date().toISOString()});
     setVersion(v => v+1);
     setSaved(true); setTimeout(() => setSaved(false), 3000);
     setSaving(false);
-    alert(`Regolamento salvato come v${version+1}.\n\nSe vuoi forzare la riaccettazione a tutti, aggiorna REGULATION_VERSION=${version+1} nel codice dell'app collaboratore.`);
+    await alertModal({
+      title: `Regolamento salvato come v${version+1}`,
+      message: `Per forzare la riaccettazione, aggiorna REGULATION_VERSION=${version+1} nel codice dell'app collaboratore.`,
+      tone: 'success',
+    });
   };
 
   return (
@@ -1817,6 +1921,7 @@ function RegolamentoTab() {
 // APP ROOT
 // ═══════════════════════════════════════════════════════════════════
 export default function App() {
+  const alertModal = useAlertModal();
   const [currentAdmin, setCurrentAdmin] = useState(() => {
     try {
       const s = JSON.parse(localStorage.getItem(ADMIN_SESSION_KEY));
@@ -1892,7 +1997,7 @@ export default function App() {
         if (!data || data.length === 0) {
           localStorage.removeItem(ADMIN_SESSION_KEY);
           setCurrentAdmin(null);
-          alert('Sessione terminata. Effettua di nuovo l’accesso.');
+          alertModal({ title: 'Sessione terminata', message: 'Per motivi di sicurezza la tua sessione è stata invalidata. Effettua di nuovo l\'accesso.', tone: 'warning' });
         } else {
           const fresh = data[0];
           if (fresh.is_super !== currentAdmin.is_super) {
