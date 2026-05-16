@@ -9,7 +9,8 @@ const ADMIN_SESSION_DAYS = 30;
 const GREEN = '#1B6B1B';
 const GREEN_LIGHT = '#eaf3de';
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, useContext, createContext } from "react";
+import { createPortal } from "react-dom";
 
 // ── SUPABASE ───────────────────────────────────────────────────────
 let _sb = null;
@@ -55,6 +56,243 @@ const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${Stri
 const MONTHS_SHORT = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
 const MONTHS_LONG = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
 const DAYS_SHORT = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+
+// ── DESIGN TOKENS ──────────────────────────────────────────────────
+const T = {
+  c: {
+    green: '#1B6B1B', greenDark: '#0f4d0f', greenLight: '#eaf3de', greenSoft: '#f3f8ed',
+    bg: '#fafafa', surface: '#ffffff', surfaceHover: '#f5f5f5', sidebar: '#fbfbfa',
+    border: '#e8e8e8', borderHover: '#d4d4d4',
+    text: '#171717', textMuted: '#525252', textFaint: '#a3a3a3',
+    danger: '#dc2626', dangerText: '#991b1b', dangerBg: '#fef2f2', dangerBorder: '#fecaca',
+    warning: '#d97706', warningText: '#92400e', warningBg: '#fffbeb', warningBorder: '#fde68a',
+    info: '#2563eb', infoText: '#1e40af', infoBg: '#eff6ff', infoBorder: '#bfdbfe',
+    super: '#b87333', superBg: '#fef3e6',
+    online: '#22c55e',
+  },
+  r: { sm: 6, md: 8, lg: 10, xl: 14 },
+  f: { xs: 11, sm: 12, md: 13, lg: 14, xl: 16, h: 18 },
+  sh: {
+    sm: '0 1px 2px rgba(0,0,0,0.04)',
+    md: '0 4px 12px rgba(0,0,0,0.06)',
+    lg: '0 12px 32px rgba(0,0,0,0.12)',
+    xl: '0 20px 50px rgba(0,0,0,0.18)',
+  },
+};
+
+// ── ICONS (inline SVG, stroke-based) ───────────────────────────────
+const Svg = ({ d, size = 18, stroke = 'currentColor', extra }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    {d}
+    {extra}
+  </svg>
+);
+const I = {
+  inbox: (p) => <Svg {...p} d={<><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></>} />,
+  send: (p) => <Svg {...p} d={<><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></>} />,
+  building: (p) => <Svg {...p} d={<><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></>} />,
+  users: (p) => <Svg {...p} d={<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>} />,
+  key: (p) => <Svg {...p} d={<><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-2 2 2 2"/><path d="m18 5 3 3"/></>} />,
+  clock: (p) => <Svg {...p} d={<><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>} />,
+  trash: (p) => <Svg {...p} d={<><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></>} />,
+  fileText: (p) => <Svg {...p} d={<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></>} />,
+  pencil: (p) => <Svg {...p} d={<><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></>} />,
+  save: (p) => <Svg {...p} d={<><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></>} />,
+  x: (p) => <Svg {...p} d={<><path d="M18 6 6 18"/><path d="m6 6 12 12"/></>} />,
+  check: (p) => <Svg {...p} d={<polyline points="20 6 9 17 4 12"/>} />,
+  plus: (p) => <Svg {...p} d={<><path d="M12 5v14"/><path d="M5 12h14"/></>} />,
+  download: (p) => <Svg {...p} d={<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></>} />,
+  eye: (p) => <Svg {...p} d={<><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></>} />,
+  refresh: (p) => <Svg {...p} d={<><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></>} />,
+  search: (p) => <Svg {...p} d={<><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></>} />,
+  logout: (p) => <Svg {...p} d={<><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></>} />,
+  alert: (p) => <Svg {...p} d={<><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></>} />,
+  info: (p) => <Svg {...p} d={<><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></>} />,
+  triangle: (p) => <Svg {...p} d={<polygon points="12 4 22 20 2 20"/>} />,
+  chevronRight: (p) => <Svg {...p} d={<polyline points="9 18 15 12 9 6"/>} />,
+  arrow: (p) => <Svg {...p} d={<><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></>} />,
+  restore: (p) => <Svg {...p} d={<><path d="M3 12a9 9 0 1 0 9-9"/><path d="M3 4v5h5"/></>} />,
+  power: (p) => <Svg {...p} d={<><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></>} />,
+};
+
+// ── BUTTON (variants) ──────────────────────────────────────────────
+function Btn({ variant='secondary', size='md', icon, children, style, ...rest }) {
+  const palette = {
+    primary: { bg: T.c.green, color: '#fff', border: T.c.green, hover: T.c.greenDark },
+    secondary: { bg: T.c.surface, color: T.c.text, border: T.c.borderHover, hover: T.c.surfaceHover },
+    ghost: { bg: 'transparent', color: T.c.textMuted, border: 'transparent', hover: T.c.surfaceHover },
+    danger: { bg: T.c.surface, color: T.c.dangerText, border: T.c.dangerBorder, hover: T.c.dangerBg },
+    dangerSolid: { bg: T.c.danger, color: '#fff', border: T.c.danger, hover: '#b91c1c' },
+    info: { bg: T.c.surface, color: T.c.infoText, border: T.c.infoBorder, hover: T.c.infoBg },
+    super: { bg: T.c.surface, color: '#9a5a14', border: '#e0c79b', hover: T.c.superBg },
+  };
+  const p = palette[variant] || palette.secondary;
+  const sizes = {
+    sm: { padding: '5px 10px', fontSize: T.f.xs, gap: 5 },
+    md: { padding: '8px 13px', fontSize: T.f.md, gap: 6 },
+    lg: { padding: '10px 18px', fontSize: T.f.md, gap: 7 },
+  };
+  const s = sizes[size];
+  const [hover, setHover] = useState(false);
+  const disabled = rest.disabled;
+  return (
+    <button {...rest} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} style={{
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: s.gap,
+      padding: s.padding, fontSize: s.fontSize, fontWeight: variant === 'primary' || variant === 'dangerSolid' ? 500 : 400,
+      fontFamily: 'inherit', cursor: disabled ? 'not-allowed' : 'pointer',
+      background: disabled ? '#f5f5f5' : (hover ? p.hover : p.bg),
+      color: disabled ? '#bbb' : p.color,
+      border: `1px solid ${disabled ? T.c.border : p.border}`,
+      borderRadius: T.r.md,
+      transition: 'background 0.12s, border-color 0.12s, transform 0.05s',
+      opacity: disabled ? 0.65 : 1,
+      whiteSpace: 'nowrap',
+      ...style,
+    }}>
+      {icon && <span style={{display:'inline-flex',alignItems:'center'}}>{icon}</span>}
+      {children}
+    </button>
+  );
+}
+
+// ── MODAL SYSTEM ───────────────────────────────────────────────────
+const ModalContext = createContext({ push: () => Promise.resolve() });
+
+export function ModalProvider({ children }) {
+  const [stack, setStack] = useState([]);
+  const idRef = useRef(0);
+  const push = useCallback((props) => new Promise(resolve => {
+    const id = ++idRef.current;
+    setStack(s => [...s, { id, resolve, ...props }]);
+  }), []);
+  const close = useCallback((id, value) => {
+    setStack(s => {
+      const m = s.find(x => x.id === id);
+      if (m) m.resolve(value);
+      return s.filter(x => x.id !== id);
+    });
+  }, []);
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape' && stack.length > 0) {
+        const top = stack[stack.length - 1];
+        close(top.id, top.kind === 'prompt' ? null : false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [stack, close]);
+  return (
+    <ModalContext.Provider value={{ push }}>
+      {children}
+      {stack.map((m, i) => <ModalView key={m.id} entry={m} onClose={close} z={1000 + i} />)}
+    </ModalContext.Provider>
+  );
+}
+
+function ModalView({ entry, onClose, z }) {
+  const { id, kind, title, message, confirmLabel, cancelLabel, danger, requireText, placeholder, defaultValue, tone, hint } = entry;
+  const [text, setText] = useState(defaultValue || '');
+  const inputRef = useRef(null);
+  useEffect(() => { if (kind === 'prompt' || requireText) inputRef.current?.focus(); }, []);
+  const cancel = () => onClose(id, kind === 'prompt' ? null : false);
+  const ok = () => {
+    if (requireText && text !== requireText) return;
+    onClose(id, kind === 'prompt' ? text : true);
+  };
+  const okDisabled = requireText && text !== requireText;
+  const toneCfg = {
+    danger: { iconBg: T.c.dangerBg, iconColor: T.c.danger, icon: I.alert },
+    warning: { iconBg: T.c.warningBg, iconColor: T.c.warning, icon: I.triangle },
+    info: { iconBg: T.c.infoBg, iconColor: T.c.info, icon: I.info },
+    success: { iconBg: T.c.greenLight, iconColor: T.c.green, icon: I.check },
+  }[tone || (danger ? 'danger' : kind === 'alert' ? 'info' : null)] || null;
+  return createPortal(
+    <div onMouseDown={cancel} style={{position:'fixed',inset:0,background:'rgba(15,15,15,0.45)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:z,padding:20,backdropFilter:'blur(2px)',animation:'mfade .14s ease-out'}}>
+      <div onMouseDown={e=>e.stopPropagation()} style={{background:T.c.surface,borderRadius:T.r.xl,boxShadow:T.sh.xl,width:'100%',maxWidth:440,padding:24,fontFamily:'inherit'}}>
+        <div style={{display:'flex',gap:14,marginBottom:12}}>
+          {toneCfg && (
+            <div style={{width:38,height:38,borderRadius:'50%',background:toneCfg.iconBg,color:toneCfg.iconColor,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+              <toneCfg.icon size={20} />
+            </div>
+          )}
+          <div style={{flex:1,minWidth:0}}>
+            {title && <div style={{fontSize:T.f.xl,fontWeight:600,color:T.c.text,marginBottom:6,lineHeight:1.3}}>{title}</div>}
+            {message && <div style={{fontSize:T.f.md,color:T.c.textMuted,lineHeight:1.55,whiteSpace:'pre-wrap'}}>{message}</div>}
+          </div>
+        </div>
+        {(kind === 'prompt' || requireText) && (
+          <div style={{marginTop:14}}>
+            <input ref={inputRef} value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=>e.key==='Enter'&&!okDisabled&&ok()} placeholder={placeholder || (requireText ? `Digita ${requireText}` : '')} style={{width:'100%',padding:'11px 13px',fontSize:T.f.lg,border:`1px solid ${T.c.borderHover}`,borderRadius:T.r.md,outline:'none',boxSizing:'border-box',fontFamily:'inherit'}} />
+            {hint && <div style={{fontSize:T.f.xs,color:T.c.textFaint,marginTop:6}}>{hint}</div>}
+          </div>
+        )}
+        <div style={{display:'flex',gap:10,justifyContent:'flex-end',marginTop:20}}>
+          {kind !== 'alert' && <Btn variant="ghost" size="md" onClick={cancel}>{cancelLabel || 'Annulla'}</Btn>}
+          <Btn variant={danger ? 'dangerSolid' : 'primary'} size="md" onClick={ok} disabled={okDisabled}>{confirmLabel || (kind === 'alert' ? 'OK' : 'Conferma')}</Btn>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+function useConfirm() {
+  const { push } = useContext(ModalContext);
+  return useCallback((opts) => push(typeof opts === 'string' ? { kind:'confirm', message: opts } : { kind:'confirm', ...opts }), [push]);
+}
+function useAlertModal() {
+  const { push } = useContext(ModalContext);
+  return useCallback((opts) => push(typeof opts === 'string' ? { kind:'alert', message: opts } : { kind:'alert', ...opts }), [push]);
+}
+function usePromptModal() {
+  const { push } = useContext(ModalContext);
+  return useCallback((opts) => push(typeof opts === 'string' ? { kind:'prompt', message: opts } : { kind:'prompt', ...opts }), [push]);
+}
+
+// ── TOAST SYSTEM ───────────────────────────────────────────────────
+const ToastContext = createContext({ push: () => {} });
+
+export function ToastProvider({ children }) {
+  const [items, setItems] = useState([]);
+  const idRef = useRef(0);
+  const push = useCallback((msg, kind='success', duration=3500) => {
+    const id = ++idRef.current;
+    setItems(s => [...s, { id, msg, kind }]);
+    setTimeout(() => setItems(s => s.filter(x => x.id !== id)), duration);
+  }, []);
+  const api = useMemo(() => ({
+    success: (m, d) => push(m, 'success', d),
+    error: (m, d) => push(m, 'error', d || 5000),
+    info: (m, d) => push(m, 'info', d),
+    warning: (m, d) => push(m, 'warning', d),
+  }), [push]);
+  return (
+    <ToastContext.Provider value={api}>
+      {children}
+      {createPortal(
+        <div style={{position:'fixed',top:20,right:20,zIndex:2000,display:'flex',flexDirection:'column',gap:10,pointerEvents:'none'}}>
+          {items.map(t => {
+            const kindCfg = {
+              success: { bg: '#ffffff', color: T.c.green, accent: T.c.green, icon: I.check },
+              error: { bg: '#ffffff', color: T.c.dangerText, accent: T.c.danger, icon: I.alert },
+              info: { bg: '#ffffff', color: T.c.infoText, accent: T.c.info, icon: I.info },
+              warning: { bg: '#ffffff', color: T.c.warningText, accent: T.c.warning, icon: I.triangle },
+            }[t.kind];
+            return (
+              <div key={t.id} style={{background:kindCfg.bg,borderLeft:`3px solid ${kindCfg.accent}`,borderRadius:T.r.md,boxShadow:T.sh.lg,padding:'12px 14px',display:'flex',alignItems:'flex-start',gap:10,minWidth:280,maxWidth:380,pointerEvents:'auto',animation:'tslide .2s ease-out',color:T.c.text,fontSize:T.f.md,lineHeight:1.45}}>
+                <div style={{color:kindCfg.accent,flexShrink:0,marginTop:1}}><kindCfg.icon size={18} /></div>
+                <div style={{flex:1,whiteSpace:'pre-wrap'}}>{t.msg}</div>
+              </div>
+            );
+          })}
+        </div>,
+        document.body
+      )}
+    </ToastContext.Provider>
+  );
+}
+function useToast() { return useContext(ToastContext); }
 
 // ── AUDIT LOG ──────────────────────────────────────────────────────
 async function logAudit(admin, action, report, details) {

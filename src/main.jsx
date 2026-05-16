@@ -1,7 +1,11 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App.jsx';
+import App, { ModalProvider, ToastProvider } from './App.jsx';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
-  <App />
+  <ModalProvider>
+    <ToastProvider>
+      <App />
+    </ToastProvider>
+  </ModalProvider>
 );

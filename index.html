@@ -9,8 +9,16 @@
     <title>DELTAgroup REPORT — Admin</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f0f0; }
+      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #fafafa; color: #171717; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
       input, textarea, select, button { font-family: inherit; }
+      input:focus, textarea:focus, select:focus { outline: 2px solid #1B6B1B33; outline-offset: 1px; }
+      button { transition: background 0.12s ease, border-color 0.12s ease, transform 0.05s ease; }
+      button:active:not(:disabled) { transform: translateY(0.5px); }
+      ::-webkit-scrollbar { width: 10px; height: 10px; }
+      ::-webkit-scrollbar-thumb { background: #d4d4d4; border-radius: 5px; border: 2px solid transparent; background-clip: padding-box; }
+      ::-webkit-scrollbar-thumb:hover { background: #a3a3a3; background-clip: padding-box; border: 2px solid transparent; }
+      @keyframes mfade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+      @keyframes tslide { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
     </style>
   </head>
   <body>
