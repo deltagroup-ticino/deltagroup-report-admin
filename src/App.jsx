@@ -155,7 +155,7 @@ async function generateReportPDF(report) {
     doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
     doc.text('Responsabile assente al termine del servizio', cx+fw/2, y+26, {align:'center', maxWidth:fw-4});
   } else {
-    if(report.client_signer_name){ doc.setTextColor(80,80,80); doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.text(report.client_signer_name, cx, y+6.5); }
+    if(report.client_signer_name){ doc.setTextColor(20,20,20); doc.setFontSize(8.5); doc.setFont('helvetica','bold'); doc.text(report.client_signer_name, cx+fw, y+5, {align:'right'}); }
     doc.setDrawColor(150,150,150); doc.setLineWidth(0.3); doc.roundedRect(cx,y+7,fw,28,2,2,'S');
     if(report.client_signature){ try{ doc.addImage(report.client_signature,'PNG',cx+1,y+8,fw-2,26); }catch(e){} }
     doc.setTextColor(130,130,130); doc.setFontSize(6.5); doc.setFont('helvetica','italic');
