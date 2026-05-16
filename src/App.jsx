@@ -1203,7 +1203,8 @@ function CollaboratoriTab({ currentAdmin }) {
 // ═══════════════════════════════════════════════════════════════════
 // TAB: AMMINISTRATORI
 // ═══════════════════════════════════════════════════════════════════
-function AmministratoriTab({ currentAdmin }) {
+function AmministratoriTab({ currentAdmin, onlineAdmins }) {
+  const online = onlineAdmins || {};
   const [admins, setAdmins] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -1260,6 +1261,17 @@ function AmministratoriTab({ currentAdmin }) {
     } catch(e) { console.error(e); alert('Errore.'); }
   };
 
+  const forceLogout = async (a) => {
+    if (a.id === currentAdmin?.id) { alert('Per disconnettere te stesso usa "Esci" in basso a sinistra.'); return; }
+    if (!confirm(`Forzare la disconnessione di ${a.admin_name}?\n\nTutte le sue sessioni attive verranno invalidate. Dovrà rifare il login.`)) return;
+    try {
+      const c = await sb();
+      const { error } = await c.rpc('force_logout_admin', { p_token: currentAdmin.token, p_target_admin_id: a.id });
+      if (error) throw error;
+      alert(`${a.admin_name} è stato disconnesso. Sarà sloggato entro 1 minuto.`);
+    } catch(e) { console.error(e); alert('Errore durante la disconnessione.'); }
+  };
+
   const toggleSuper = async (a) => {
     if (a.id === currentAdmin?.id) { alert('Non puoi cambiare il tuo livello.'); return; }
     const next = !a.is_super;
@@ -1290,7 +1302,7 @@ function AmministratoriTab({ currentAdmin }) {
   return (
     <div style={{padding:28,overflowY:'auto',height:'100vh',boxSizing:'border-box'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
-        <div><div style={{fontWeight:600,fontSize:18}}>🔑 Amministratori</div><div style={{fontSize:13,color:'#888',marginTop:2}}>Gestione accessi al pannello · {admins.length} totali</div></div>
+        <div><div style={{fontWeight:600,fontSize:18}}>🔑 Amministratori</div><div style={{fontSize:13,color:'#888',marginTop:2}}>Gestione accessi al pannello · {admins.length} totali · <span style={{color:'#22c55e',fontWeight:500}}>{Object.keys(online).length} online ora</span></div></div>
         <button onClick={addAdmin} disabled={adding} style={{padding:'9px 16px',background:GREEN,color:'#fff',border:'none',borderRadius:9,cursor:'pointer',fontSize:13,fontWeight:500,fontFamily:'inherit'}}>
           {adding?'Creazione…':'+ Aggiungi amministratore'}
         </button>
@@ -1310,6 +1322,7 @@ function AmministratoriTab({ currentAdmin }) {
             {filtered.map((a,i) => (
               <tr key={a.id} style={{borderTop:i>0?'0.5px solid #f0f0f0':'none'}}>
                 <td style={{padding:'11px 14px',fontWeight:500}}>
+                  <span title={online[a.id]?'Online ora':'Non in linea'} style={{display:'inline-block',width:8,height:8,borderRadius:'50%',marginRight:8,background:online[a.id]?'#22c55e':'#d4d4d4',verticalAlign:'middle'}} />
                   {a.admin_name}
                   {a.id===currentAdmin?.id && <span style={{marginLeft:8,fontSize:10,padding:'2px 6px',background:GREEN_LIGHT,color:'#1a5c1a',borderRadius:4}}>tu</span>}
                   {a.is_super && <span style={{marginLeft:6,fontSize:9,padding:'1px 5px',background:'#b87333',color:'#fff',borderRadius:3,letterSpacing:0.5}}>SUPER</span>}
@@ -1326,6 +1339,7 @@ function AmministratoriTab({ currentAdmin }) {
                     <button onClick={() => toggleSuper(a)} disabled={a.id===currentAdmin?.id} style={{padding:'4px 10px',border:'1px solid #d8b78a',borderRadius:6,background:'#fff',color:'#9a5a14',cursor:a.id===currentAdmin?.id?'not-allowed':'pointer',fontSize:11,fontFamily:'inherit',opacity:a.id===currentAdmin?.id?0.4:1}}>
                       {a.is_super?'Togli super':'Rendi super'}
                     </button>
+                    <button onClick={() => forceLogout(a)} disabled={a.id===currentAdmin?.id} style={{padding:'4px 10px',border:'1px solid #c8d8f0',borderRadius:6,background:'#fff',color:'#0b5e8a',cursor:a.id===currentAdmin?.id?'not-allowed':'pointer',fontSize:11,fontFamily:'inherit',opacity:a.id===currentAdmin?.id?0.4:1}} title={online[a.id]?'Disconnetti tutte le sessioni (utente online)':'Invalida tutte le sessioni salvate'}>Disconnetti</button>
                     <button onClick={() => removeAdmin(a)} disabled={a.id===currentAdmin?.id} style={{padding:'4px 10px',border:'1px solid #f0c8c8',borderRadius:6,background:'#fff',color:'#a32d2d',cursor:a.id===currentAdmin?.id?'not-allowed':'pointer',fontSize:11,fontFamily:'inherit',opacity:a.id===currentAdmin?.id?0.4:1}}>Elimina</button>
                   </div>
                 </td>
@@ -1513,6 +1527,36 @@ export default function App() {
     setActiveTab('inbox');
   };
 
+  // Realtime presence: track this admin in a shared channel; expose online list to children
+  const [onlineAdmins, setOnlineAdmins] = useState({});
+  useEffect(() => {
+    if (!currentAdmin?.id) return;
+    let channel;
+    let cancelled = false;
+    (async () => {
+      const c = await sb();
+      if (cancelled) return;
+      channel = c.channel('admin-presence', { config: { presence: { key: currentAdmin.id } } });
+      channel.on('presence', { event: 'sync' }, () => {
+        const state = channel.presenceState();
+        const flat = {};
+        Object.entries(state).forEach(([id, metas]) => {
+          flat[id] = (metas && metas[0]) ? metas[0] : { admin_name: '?' };
+        });
+        setOnlineAdmins(flat);
+      });
+      channel.subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await channel.track({ admin_id: currentAdmin.id, admin_name: currentAdmin.admin_name, is_super: !!currentAdmin.is_super, online_at: new Date().toISOString() });
+        }
+      });
+    })();
+    return () => {
+      cancelled = true;
+      if (channel) channel.unsubscribe();
+    };
+  }, [currentAdmin?.id]);
+
   // Periodic + on-focus session validation: if invalidated server-side, force re-login
   useEffect(() => {
     if (!currentAdmin?.token) return;
@@ -1562,7 +1606,7 @@ export default function App() {
         {safeTab==='spedisci'        && <SpedisciTab currentAdmin={currentAdmin} />}
         {safeTab==='clienti'         && <ClientiTab />}
         {safeTab==='collaboratori'   && isSuper && <CollaboratoriTab currentAdmin={currentAdmin} />}
-        {safeTab==='amministratori'  && isSuper && <AmministratoriTab currentAdmin={currentAdmin} />}
+        {safeTab==='amministratori'  && isSuper && <AmministratoriTab currentAdmin={currentAdmin} onlineAdmins={onlineAdmins} />}
         {safeTab==='cronologia'      && isSuper && <CronologiaTab />}
         {safeTab==='regolamento'     && isSuper && <RegolamentoTab />}
       </div>
