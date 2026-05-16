@@ -428,19 +428,33 @@ function InboxTab() {
       const email = clientsMap[(report.client_name||'').toLowerCase()] || '';
       const subject = encodeURIComponent(`Rapporto di Servizio ${report.report_number} – ${report.client_name}`);
       const body = encodeURIComponent(`Spettabile Cliente,\n\nin allegato trasmettiamo il Rapporto di Servizio N\u00B0 ${report.report_number} del ${fromISO(report.service_date)}.\n\nCordiali saluti,\nDELTAgroup Security & Services AG`);
+      let shareAborted = false;
       if (navigator.canShare && navigator.canShare({files:[file]})) {
-        await navigator.share({files:[file], title:`Rapporto ${report.report_number}`});
+        try {
+          await navigator.share({files:[file], title:`Rapporto ${report.report_number}`});
+        } catch(err) {
+          if (err && err.name === 'AbortError') shareAborted = true;
+          else throw err;
+        }
       } else {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a'); a.href=url; a.download=file.name; a.click();
         window.open(`mailto:${email}?subject=${subject}&body=${body}`);
       }
+      if (shareAborted) { setSendingId(null); return; }
+      const confirmed = window.confirm(
+        `Hai effettivamente inviato il rapporto N° ${report.report_number} a ${report.client_name||'cliente'}?\n\n`+
+        `Conferma SOLO se l'email è stata spedita al cliente.\n`+
+        `In caso contrario il rapporto resterà come "Da inviare".`
+      );
+      if (!confirmed) { setSendingId(null); return; }
       const c = await sb();
-      await c.from('dr_reports').update({status:'sent_to_client',sent_to_client_at:new Date().toISOString()}).eq('id',report.id);
-      setSelectedReport(r => ({...r,status:'sent_to_client',sent_to_client_at:new Date().toISOString()}));
-      setDayReports(prev => prev.map(r => r.id===report.id ? {...r,status:'sent_to_client'} : r));
+      const sentAt = new Date().toISOString();
+      await c.from('dr_reports').update({status:'sent_to_client',sent_to_client_at:sentAt}).eq('id',report.id);
+      setSelectedReport(r => ({...r,status:'sent_to_client',sent_to_client_at:sentAt}));
+      setDayReports(prev => prev.map(r => r.id===report.id ? {...r,status:'sent_to_client',sent_to_client_at:sentAt} : r));
       loadDays();
-    } catch(e) { console.error(e); }
+    } catch(e) { console.error(e); alert('Errore durante la preparazione del PDF.'); }
     setSendingId(null);
   };
 
@@ -748,17 +762,30 @@ function SpedisciTab() {
       }
       const subject = encodeURIComponent(`Rapporti di Servizio – ${clientName}`);
       const body = encodeURIComponent(`Spettabile Cliente,\n\nin allegato trasmettiamo i Rapporti di Servizio.\n\nCordiali saluti,\nDELTAgroup Security & Services AG`);
+      let shareAborted = false;
       if (navigator.canShare && navigator.canShare({files})) {
-        await navigator.share({files, title:`Rapporti ${clientName}`});
+        try {
+          await navigator.share({files, title:`Rapporti ${clientName}`});
+        } catch(err) {
+          if (err && err.name === 'AbortError') shareAborted = true;
+          else throw err;
+        }
       } else {
         files.forEach(f => { const url=URL.createObjectURL(f); const a=document.createElement('a'); a.href=url; a.download=f.name; a.click(); });
         window.open(`mailto:${email}?subject=${subject}&body=${body}`);
       }
+      if (shareAborted) { setSending(null); return; }
+      const confirmed = window.confirm(
+        `Hai effettivamente inviato i ${toSend.length} rapporto/i a ${clientName}?\n\n`+
+        `Conferma SOLO se l'email è stata spedita al cliente.\n`+
+        `In caso contrario i rapporti resteranno nella sezione Spedisci.`
+      );
+      if (!confirmed) { setSending(null); return; }
       const c = await sb();
       const ids = toSend.map(r => r.id);
       await c.from('dr_reports').update({status:'sent_to_client',sent_to_client_at:new Date().toISOString()}).in('id',ids);
       setReports(prev => prev.filter(r => !ids.includes(r.id)));
-    } catch(e) { console.error(e); }
+    } catch(e) { console.error(e); alert('Errore durante la preparazione dei PDF.'); }
     setSending(null);
   };
 
