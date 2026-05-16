@@ -466,36 +466,80 @@ function AppName({ dark = false }) {
 
 // ── SIDEBAR ───────────────────────────────────────────────────────
 const NAV_ALL = [
-  { id:'inbox',         icon:'📥', label:'Inbox',         super: false },
-  { id:'spedisci',      icon:'📤', label:'Spedisci',      super: false },
-  { id:'clienti',       icon:'🏢', label:'Clienti',       super: false },
-  { id:'collaboratori', icon:'👥', label:'Collaboratori', super: true },
-  { id:'amministratori',icon:'🔑', label:'Amministratori',super: true },
-  { id:'cronologia',    icon:'📜', label:'Cronologia',    super: true },
-  { id:'cestino',       icon:'🗑️', label:'Cestino',       super: true },
-  { id:'regolamento',   icon:'📄', label:'Regolamento',   super: true },
+  { id:'inbox',         Icon: I.inbox,    label:'Inbox',         super: false },
+  { id:'spedisci',      Icon: I.send,     label:'Spedisci',      super: false },
+  { id:'clienti',       Icon: I.building, label:'Clienti',       super: false },
+  { id:'collaboratori', Icon: I.users,    label:'Collaboratori', super: true },
+  { id:'amministratori',Icon: I.key,      label:'Amministratori',super: true },
+  { id:'cronologia',    Icon: I.clock,    label:'Cronologia',    super: true },
+  { id:'cestino',       Icon: I.trash,    label:'Cestino',       super: true },
+  { id:'regolamento',   Icon: I.fileText, label:'Regolamento',   super: true },
 ];
+
+function SidebarNavItem({ Icon, label, active, onClick }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        width:'100%', display:'flex', alignItems:'center', gap:11,
+        padding:'9px 12px', borderRadius:T.r.md, border:'none', cursor:'pointer',
+        marginBottom:1, fontSize:T.f.md, fontFamily:'inherit', textAlign:'left',
+        background: active ? 'rgba(255,255,255,0.13)' : (hover ? 'rgba(255,255,255,0.06)' : 'transparent'),
+        color: active ? '#ffffff' : (hover ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.65)'),
+        fontWeight: active ? 500 : 400,
+        transition: 'background 0.12s, color 0.12s',
+        position: 'relative',
+      }}
+    >
+      {active && <span style={{position:'absolute',left:-8,top:8,bottom:8,width:3,borderRadius:2,background:'#a3d986'}} />}
+      <Icon size={17} />
+      {label}
+    </button>
+  );
+}
 
 function Sidebar({ active, onNav, onLogout, adminName, isSuper }) {
   const items = NAV_ALL.filter(i => !i.super || isSuper);
+  const [logoutHover, setLogoutHover] = useState(false);
   return (
-    <div style={{width:200,background:'#0f3d0f',display:'flex',flexDirection:'column',height:'100vh',flexShrink:0}}>
-      <div style={{padding:'18px 16px 14px',borderBottom:'1px solid rgba(255,255,255,0.1)'}}>
+    <div style={{width:212,background:T.c.greenDark,display:'flex',flexDirection:'column',height:'100vh',flexShrink:0,boxShadow:'1px 0 0 rgba(0,0,0,0.05)'}}>
+      <div style={{padding:'20px 18px 16px',borderBottom:'1px solid rgba(255,255,255,0.08)'}}>
         <AppName />
-        <div style={{fontSize:10,color:'rgba(255,255,255,0.45)',marginTop:5}}>
-          Pannello Amministratore{adminName ? ' ' : ''}<span style={{color:'rgba(255,255,255,0.85)',fontWeight:600}}>{adminName||''}</span>
-          {isSuper && <span style={{marginLeft:6,fontSize:9,padding:'1px 5px',background:'#b87333',color:'#fff',borderRadius:3,letterSpacing:0.5}}>SUPER</span>}
+        <div style={{marginTop:10,display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+          <div style={{display:'flex',alignItems:'center',gap:6,minWidth:0}}>
+            <div style={{width:22,height:22,borderRadius:'50%',background:'rgba(255,255,255,0.12)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:600,flexShrink:0}}>
+              {(adminName||'?').slice(0,1)}
+            </div>
+            <span style={{color:'#fff',fontSize:T.f.sm,fontWeight:500,letterSpacing:0.1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{adminName||'—'}</span>
+          </div>
+          {isSuper && <span style={{fontSize:9,padding:'2px 6px',background:T.c.super,color:'#fff',borderRadius:3,letterSpacing:0.8,fontWeight:600}}>SUPER</span>}
         </div>
       </div>
-      <nav style={{flex:1,padding:'12px 8px',overflowY:'auto'}}>
+      <nav style={{flex:1,padding:'14px 10px',overflowY:'auto'}}>
         {items.map(item => (
-          <button key={item.id} onClick={() => onNav(item.id)} style={{width:'100%',display:'flex',alignItems:'center',gap:10,padding:'10px 12px',borderRadius:8,border:'none',cursor:'pointer',marginBottom:2,fontSize:14,fontFamily:'inherit',background:active===item.id?'rgba(255,255,255,0.12)':'transparent',color:active===item.id?'#fff':'rgba(255,255,255,0.6)',fontWeight:active===item.id?500:400}}>
-            <span style={{fontSize:17}}>{item.icon}</span>{item.label}
-          </button>
+          <SidebarNavItem key={item.id} Icon={item.Icon} label={item.label} active={active===item.id} onClick={() => onNav(item.id)} />
         ))}
       </nav>
-      <div style={{padding:'12px 8px',borderTop:'1px solid rgba(255,255,255,0.1)'}}>
-        <button onClick={onLogout} style={{width:'100%',padding:'9px 12px',border:'none',borderRadius:8,background:'transparent',color:'rgba(255,255,255,0.5)',cursor:'pointer',fontSize:13,textAlign:'left',fontFamily:'inherit'}}>⬅ Esci</button>
+      <div style={{padding:'12px 10px',borderTop:'1px solid rgba(255,255,255,0.08)'}}>
+        <button
+          onClick={onLogout}
+          onMouseEnter={() => setLogoutHover(true)}
+          onMouseLeave={() => setLogoutHover(false)}
+          style={{
+            width:'100%', display:'flex', alignItems:'center', gap:9,
+            padding:'9px 12px', borderRadius:T.r.md, border:'none',
+            background: logoutHover ? 'rgba(255,255,255,0.08)' : 'transparent',
+            color: logoutHover ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.55)',
+            cursor:'pointer', fontSize:T.f.md, fontFamily:'inherit', textAlign:'left',
+            transition:'background 0.12s, color 0.12s',
+          }}
+        >
+          <I.logout size={16} />
+          Esci
+        </button>
       </div>
     </div>
   );
@@ -556,40 +600,42 @@ function AdminLogin({ onLogin }) {
   };
 
   return (
-    <div style={{minHeight:'100vh',background:'#f0f0f0',display:'flex',alignItems:'center',justifyContent:'center'}}>
-      <div style={{background:'#fff',borderRadius:16,padding:'40px 36px',width:340,boxShadow:'0 2px 20px rgba(0,0,0,0.08)'}}>
+    <div style={{minHeight:'100vh',background:`linear-gradient(135deg, ${T.c.bg} 0%, #f0ede4 100%)`,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+      <div style={{background:T.c.surface,borderRadius:T.r.xl,padding:'40px 36px',width:'100%',maxWidth:380,boxShadow:T.sh.lg}}>
         <div style={{textAlign:'center',marginBottom:28}}>
-          <svg width="52" height="52" viewBox="0 0 52 52" style={{display:'block',margin:'0 auto 14px'}}>
-            <rect width="52" height="52" rx="12" fill={GREEN}/>
-            <polygon points="26,10 46,43 6,43" fill="none" stroke="white" strokeWidth="4.5" strokeLinejoin="round" strokeLinecap="round"/>
+          <svg width="56" height="56" viewBox="0 0 52 52" style={{display:'block',margin:'0 auto 16px'}}>
+            <rect width="52" height="52" rx="14" fill={GREEN}/>
+            <polygon points="26,11 45,42 7,42" fill="none" stroke="white" strokeWidth="4" strokeLinejoin="round" strokeLinecap="round"/>
           </svg>
           <AppName dark />
-          <div style={{fontSize:12,color:'#999',marginTop:6}}>Accesso amministratore</div>
+          <div style={{fontSize:T.f.sm,color:T.c.textFaint,marginTop:6}}>Accesso amministratore</div>
         </div>
 
         {loadingAdmins ? (
-          <div style={{textAlign:'center',color:'#888',fontSize:13,padding:20}}>Caricamento…</div>
+          <div style={{textAlign:'center',color:T.c.textMuted,fontSize:T.f.md,padding:20}}>Caricamento…</div>
         ) : loadError ? (
-          <div style={{background:'#fcebeb',color:'#a32d2d',padding:'9px 13px',borderRadius:8,fontSize:13,textAlign:'center'}}>{loadError}</div>
+          <div style={{background:T.c.dangerBg,color:T.c.dangerText,padding:'10px 14px',borderRadius:T.r.md,fontSize:T.f.md,textAlign:'center',border:`1px solid ${T.c.dangerBorder}`}}>{loadError}</div>
         ) : admins.length === 0 ? (
-          <div style={{background:'#faeeda',color:'#854f0b',padding:'12px 14px',borderRadius:8,fontSize:13,textAlign:'center'}}>
+          <div style={{background:T.c.warningBg,color:T.c.warningText,padding:'12px 14px',borderRadius:T.r.md,fontSize:T.f.md,textAlign:'center',border:`1px solid ${T.c.warningBorder}`}}>
             Nessun amministratore configurato. Contatta il responsabile sistema.
           </div>
         ) : (
           <>
-            <div style={{marginBottom:12}}>
-              <label style={{fontSize:12,color:'#555',fontWeight:500,display:'block',marginBottom:6}}>Amministratore</label>
-              <select value={selectedId} onChange={e => { setSelectedId(e.target.value); setError(''); }} style={{width:'100%',padding:'12px 14px',border:'1px solid #ddd',borderRadius:9,fontSize:14,boxSizing:'border-box',fontFamily:'inherit',outline:'none',background:'#fff'}}>
+            <div style={{marginBottom:14}}>
+              <label style={{fontSize:T.f.sm,color:T.c.textMuted,fontWeight:500,display:'block',marginBottom:6}}>Amministratore</label>
+              <select value={selectedId} onChange={e => { setSelectedId(e.target.value); setError(''); }} style={{width:'100%',padding:'11px 13px',border:`1px solid ${T.c.borderHover}`,borderRadius:T.r.md,fontSize:T.f.lg,boxSizing:'border-box',fontFamily:'inherit',outline:'none',background:T.c.surface,color:T.c.text}}>
                 <option value="">— Seleziona —</option>
                 {admins.map(a => <option key={a.id} value={a.id}>{a.admin_name}</option>)}
               </select>
             </div>
-            <div style={{marginBottom:12}}>
-              <label style={{fontSize:12,color:'#555',fontWeight:500,display:'block',marginBottom:6}}>PIN amministratore</label>
-              <input ref={pinRef} type="password" value={pin} onChange={e => setPin(e.target.value)} onKeyDown={e => e.key==='Enter' && handleLogin()} placeholder="••••••" style={{width:'100%',padding:'12px 14px',border:'1px solid #ddd',borderRadius:9,fontSize:18,letterSpacing:6,textAlign:'center',boxSizing:'border-box',fontFamily:'inherit',outline:'none'}} />
+            <div style={{marginBottom:14}}>
+              <label style={{fontSize:T.f.sm,color:T.c.textMuted,fontWeight:500,display:'block',marginBottom:6}}>PIN</label>
+              <input ref={pinRef} type="password" value={pin} onChange={e => setPin(e.target.value)} onKeyDown={e => e.key==='Enter' && handleLogin()} placeholder="••••••" style={{width:'100%',padding:'12px 14px',border:`1px solid ${T.c.borderHover}`,borderRadius:T.r.md,fontSize:T.f.h,letterSpacing:8,textAlign:'center',boxSizing:'border-box',fontFamily:'inherit',outline:'none',color:T.c.text}} />
             </div>
-            {error && <div style={{background:'#fcebeb',color:'#a32d2d',padding:'9px 13px',borderRadius:8,fontSize:13,marginBottom:12,textAlign:'center'}}>{error}</div>}
-            <button onClick={handleLogin} disabled={submitting} style={{width:'100%',padding:13,background:GREEN,color:'#fff',border:'none',borderRadius:10,fontSize:15,fontWeight:500,cursor:'pointer',fontFamily:'inherit',opacity:submitting?0.6:1}}>{submitting?'Accesso…':'Accedi'}</button>
+            {error && <div style={{background:T.c.dangerBg,color:T.c.dangerText,padding:'9px 13px',borderRadius:T.r.md,fontSize:T.f.md,marginBottom:12,textAlign:'center',border:`1px solid ${T.c.dangerBorder}`}}>{error}</div>}
+            <Btn variant="primary" size="lg" onClick={handleLogin} disabled={submitting} style={{width:'100%'}}>
+              {submitting?'Accesso…':'Accedi'}
+            </Btn>
           </>
         )}
       </div>
@@ -776,7 +822,7 @@ function InboxTab({ currentAdmin }) {
       {/* Colonna 1: giorni */}
       <div style={{width:280,borderRight:'1px solid #e8e8e8',display:'flex',flexDirection:'column',background:'#fafafa',flexShrink:0}}>
         <div style={{padding:'14px 14px 10px',borderBottom:'1px solid #e8e8e8'}}>
-          <div style={{fontWeight:500,fontSize:15,marginBottom:10}}>📥 Inbox</div>
+          <div style={{fontWeight:600,fontSize:T.f.lg,marginBottom:12,display:'flex',alignItems:'center',gap:8,color:T.c.text}}><I.inbox size={18} /> Inbox</div>
           <input type="date" value={searchDate} onChange={e=>setSearchDate(e.target.value)} style={{width:'100%',padding:'8px 10px',border:'1px solid #ddd',borderRadius:7,fontSize:13,boxSizing:'border-box',fontFamily:'inherit'}} />
         </div>
         <div style={{flex:1,overflowY:'auto'}}>
@@ -814,7 +860,7 @@ function InboxTab({ currentAdmin }) {
       {/* Colonna 2: rapporti del giorno */}
       <div style={{width:320,borderRight:'1px solid #e8e8e8',display:'flex',flexDirection:'column',background:'#fff',flexShrink:0}}>
         {!selectedDay
-          ? <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:'#bbb',fontSize:14}}><div style={{textAlign:'center'}}><div style={{fontSize:32,marginBottom:10}}>📅</div>Seleziona un giorno</div></div>
+          ? <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:T.c.textFaint,fontSize:T.f.md}}><div style={{textAlign:'center'}}><div style={{color:T.c.borderHover,marginBottom:12,display:'flex',justifyContent:'center'}}><I.clock size={36} /></div>Seleziona un giorno</div></div>
           : <>
             <div style={{padding:'14px',borderBottom:'1px solid #eee'}}>
               <div style={{fontWeight:500,fontSize:14}}>{fromISO(selectedDay)}</div>
@@ -844,7 +890,7 @@ function InboxTab({ currentAdmin }) {
       {/* Colonna 3: dettaglio rapporto */}
       <div style={{flex:1,display:'flex',flexDirection:'column',background:'#fff',overflowY:'auto'}}>
         {!selectedReport
-          ? <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:'#bbb',fontSize:14}}><div style={{textAlign:'center'}}><div style={{fontSize:32,marginBottom:10}}>📋</div>Seleziona un rapporto</div></div>
+          ? <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:T.c.textFaint,fontSize:T.f.md}}><div style={{textAlign:'center'}}><div style={{color:T.c.borderHover,marginBottom:12,display:'flex',justifyContent:'center'}}><I.fileText size={36} /></div>Seleziona un rapporto</div></div>
           : <div style={{padding:24,maxWidth:700}}>
             {/* Header */}
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:20,gap:12}}>
@@ -943,31 +989,31 @@ function InboxTab({ currentAdmin }) {
             {/* Azioni */}
             <div style={{display:'flex',gap:10,marginBottom:12}}>
               {!editMode
-                ? <button onClick={() => setEditMode(true)} style={{flex:1,padding:10,border:'1px solid #ddd',borderRadius:9,background:'#fff',cursor:'pointer',fontSize:13,fontFamily:'inherit',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>✏️ Correggi</button>
+                ? <Btn variant="secondary" size="lg" icon={<I.pencil size={15} />} onClick={() => setEditMode(true)} style={{flex:1}}>Correggi</Btn>
                 : <>
-                  <button onClick={saveEdit} disabled={saving} style={{flex:1,padding:10,border:'none',borderRadius:9,background:GREEN,color:'#fff',cursor:'pointer',fontSize:13,fontFamily:'inherit',fontWeight:500}}>{saving?'Salvataggio…':'💾 Salva'}</button>
-                  <button onClick={() => setEditMode(false)} style={{padding:'10px 16px',border:'1px solid #ddd',borderRadius:9,background:'#fff',cursor:'pointer',fontSize:13,fontFamily:'inherit'}}>Annulla</button>
+                  <Btn variant="primary" size="lg" icon={!saving && <I.save size={15} />} onClick={saveEdit} disabled={saving} style={{flex:1}}>{saving?'Salvataggio…':'Salva'}</Btn>
+                  <Btn variant="secondary" size="lg" onClick={() => setEditMode(false)}>Annulla</Btn>
                 </>
               }
-              <button onClick={() => previewPDF(selectedReport)} style={{flex:1,padding:10,border:'1px solid #ddd',borderRadius:9,background:'#fff',cursor:'pointer',fontSize:13,fontFamily:'inherit',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>📄 Anteprima PDF</button>
+              <Btn variant="secondary" size="lg" icon={<I.fileText size={15} />} onClick={() => previewPDF(selectedReport)} style={{flex:1}}>Anteprima PDF</Btn>
             </div>
 
             {!editMode && selectedReport.status!=='sent_to_client' && (
-              <button onClick={() => sendToClient(selectedReport)} disabled={sendingId===selectedReport.id} style={{width:'100%',padding:14,background:GREEN,color:'#fff',border:'none',borderRadius:10,fontSize:14,fontWeight:500,cursor:'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',justifyContent:'center',gap:8,marginBottom:16,opacity:sendingId===selectedReport.id?0.6:1}}>
-                {sendingId===selectedReport.id?'Preparazione…':'📤 Invia al cliente'}
-              </button>
+              <Btn variant="primary" size="lg" icon={!(sendingId===selectedReport.id) && <I.send size={16} />} onClick={() => sendToClient(selectedReport)} disabled={sendingId===selectedReport.id} style={{width:'100%',marginBottom:14}}>
+                {sendingId===selectedReport.id?'Preparazione…':'Invia al cliente'}
+              </Btn>
             )}
             {selectedReport.status==='sent_to_client' && (
-              <div style={{padding:'10px 14px',background:GREEN_LIGHT,borderRadius:9,fontSize:13,color:'#1a5c1a',marginBottom:16}}>
-                ✅ Inviato al cliente il {fmtDT(selectedReport.sent_to_client_at)}
+              <div style={{padding:'12px 14px',background:T.c.greenLight,borderRadius:T.r.md,fontSize:T.f.md,color:'#1a5c1a',marginBottom:14,display:'flex',alignItems:'center',gap:8,border:'1px solid #cfe5b8'}}>
+                <I.check size={16} /> Inviato al cliente il {fmtDT(selectedReport.sent_to_client_at)}
               </div>
             )}
 
             {!editMode && (
               <div style={{marginBottom:16}}>
-                <button onClick={() => deleteReport(selectedReport)} style={{width:'100%',padding:'10px 14px',background:'#fff',color:'#a32d2d',border:'1px solid #f0c8c8',borderRadius:9,cursor:'pointer',fontSize:13,fontFamily:'inherit',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
-                  🗑 Sposta nel cestino
-                </button>
+                <Btn variant="danger" size="md" icon={<I.trash size={14} />} onClick={() => deleteReport(selectedReport)} style={{width:'100%'}}>
+                  Sposta nel cestino
+                </Btn>
               </div>
             )}
 
@@ -1168,10 +1214,10 @@ function SpedisciTab({ currentAdmin }) {
 
   const Header = () => (
     <div style={{marginBottom:20}}>
-      <div style={{fontWeight:600,fontSize:18,marginBottom:12}}>📤 Spedisci</div>
-      <div style={{display:'inline-flex',background:'#f0f0f0',borderRadius:9,padding:3}}>
-        <button onClick={() => setView('pending')} style={{padding:'7px 14px',border:'none',borderRadius:7,background:view==='pending'?'#fff':'transparent',color:view==='pending'?'#111':'#666',cursor:'pointer',fontSize:13,fontFamily:'inherit',fontWeight:view==='pending'?500:400,boxShadow:view==='pending'?'0 1px 3px rgba(0,0,0,0.06)':'none'}}>📤 Da inviare</button>
-        <button onClick={() => setView('archive')} style={{padding:'7px 14px',border:'none',borderRadius:7,background:view==='archive'?'#fff':'transparent',color:view==='archive'?'#111':'#666',cursor:'pointer',fontSize:13,fontFamily:'inherit',fontWeight:view==='archive'?500:400,boxShadow:view==='archive'?'0 1px 3px rgba(0,0,0,0.06)':'none'}}>📚 Archivio inviati</button>
+      <div style={{fontWeight:600,fontSize:T.f.h,marginBottom:14,display:'flex',alignItems:'center',gap:9,color:T.c.text}}><I.send size={18} /> Spedisci</div>
+      <div style={{display:'inline-flex',background:T.c.surfaceHover,borderRadius:T.r.md,padding:3,border:`1px solid ${T.c.border}`}}>
+        <button onClick={() => setView('pending')} style={{padding:'7px 14px',border:'none',borderRadius:T.r.sm,background:view==='pending'?T.c.surface:'transparent',color:view==='pending'?T.c.text:T.c.textMuted,cursor:'pointer',fontSize:T.f.md,fontFamily:'inherit',fontWeight:view==='pending'?500:400,boxShadow:view==='pending'?T.sh.sm:'none',display:'inline-flex',alignItems:'center',gap:7}}><I.send size={13} /> Da inviare</button>
+        <button onClick={() => setView('archive')} style={{padding:'7px 14px',border:'none',borderRadius:T.r.sm,background:view==='archive'?T.c.surface:'transparent',color:view==='archive'?T.c.text:T.c.textMuted,cursor:'pointer',fontSize:T.f.md,fontFamily:'inherit',fontWeight:view==='archive'?500:400,boxShadow:view==='archive'?T.sh.sm:'none',display:'inline-flex',alignItems:'center',gap:7}}><I.clock size={13} /> Archivio inviati</button>
       </div>
     </div>
   );
@@ -1336,7 +1382,7 @@ function ClientiTab() {
   return (
     <div style={{padding:28,maxWidth:700,overflowY:'auto',height:'100vh',boxSizing:'border-box'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
-        <div><div style={{fontWeight:600,fontSize:18}}>🏢 Anagrafica Clienti</div><div style={{fontSize:13,color:'#888',marginTop:2}}>Email per l'invio dei rapporti</div></div>
+        <div><div style={{fontWeight:600,fontSize:T.f.h,display:'flex',alignItems:'center',gap:9,color:T.c.text}}><I.building size={18} /> Anagrafica Clienti</div><div style={{fontSize:T.f.md,color:T.c.textMuted,marginTop:4}}>Email per l'invio dei rapporti</div></div>
         <button onClick={() => {setForm({name:'',email:'',notes:''});setEditing(null);setShowForm(true);}} style={{padding:'9px 16px',background:GREEN,color:'#fff',border:'none',borderRadius:9,cursor:'pointer',fontSize:13,fontWeight:500,fontFamily:'inherit'}}>+ Aggiungi cliente</button>
       </div>
       {showForm && (
@@ -1434,7 +1480,7 @@ function CollaboratoriTab({ currentAdmin }) {
   return (
     <div style={{padding:28,overflowY:'auto',height:'100vh',boxSizing:'border-box'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
-        <div><div style={{fontWeight:600,fontSize:18}}>👥 Collaboratori</div><div style={{fontSize:13,color:'#888',marginTop:2}}>Gestione accessi e PIN · {collabs.length} totali</div></div>
+        <div><div style={{fontWeight:600,fontSize:T.f.h,display:'flex',alignItems:'center',gap:9,color:T.c.text}}><I.users size={18} /> Collaboratori</div><div style={{fontSize:T.f.md,color:T.c.textMuted,marginTop:4}}>Gestione accessi e PIN · {collabs.length} totali</div></div>
         <button onClick={importFromPlan} disabled={importing} style={{padding:'9px 16px',background:'#1d4ed8',color:'#fff',border:'none',borderRadius:9,cursor:'pointer',fontSize:13,fontWeight:500,fontFamily:'inherit'}}>
           {importing?'Import in corso…':'⬇ Importa da PLAN'}
         </button>
@@ -1619,7 +1665,7 @@ function AmministratoriTab({ currentAdmin, onlineAdmins }) {
   return (
     <div style={{padding:28,overflowY:'auto',height:'100vh',boxSizing:'border-box'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
-        <div><div style={{fontWeight:600,fontSize:18}}>🔑 Amministratori</div><div style={{fontSize:13,color:'#888',marginTop:2}}>Gestione accessi al pannello · {admins.length} totali · <span style={{color:'#22c55e',fontWeight:500}}>{Object.keys(online).length} online ora</span></div></div>
+        <div><div style={{fontWeight:600,fontSize:T.f.h,display:'flex',alignItems:'center',gap:9,color:T.c.text}}><I.key size={18} /> Amministratori</div><div style={{fontSize:T.f.md,color:T.c.textMuted,marginTop:4}}>Gestione accessi al pannello · {admins.length} totali · <span style={{color:T.c.online,fontWeight:500}}>{Object.keys(online).length} online ora</span></div></div>
         <button onClick={addAdmin} disabled={adding} style={{padding:'9px 16px',background:GREEN,color:'#fff',border:'none',borderRadius:9,cursor:'pointer',fontSize:13,fontWeight:500,fontFamily:'inherit'}}>
           {adding?'Creazione…':'+ Aggiungi amministratore'}
         </button>
@@ -1712,7 +1758,7 @@ function CronologiaTab() {
   return (
     <div style={{padding:28,overflowY:'auto',height:'100vh',boxSizing:'border-box'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
-        <div><div style={{fontWeight:600,fontSize:18}}>📜 Cronologia azioni</div><div style={{fontSize:13,color:'#888',marginTop:2}}>Ultime {rows.length} azioni · {filtered.length} visibili</div></div>
+        <div><div style={{fontWeight:600,fontSize:T.f.h,display:'flex',alignItems:'center',gap:9,color:T.c.text}}><I.clock size={18} /> Cronologia azioni</div><div style={{fontSize:T.f.md,color:T.c.textMuted,marginTop:4}}>Ultime {rows.length} azioni · {filtered.length} visibili</div></div>
         <button onClick={load} style={{padding:'7px 12px',border:'1px solid #ddd',borderRadius:7,background:'#fff',cursor:'pointer',fontSize:12,fontFamily:'inherit'}}>⟳ Aggiorna</button>
       </div>
       <div style={{display:'grid',gridTemplateColumns:'1fr 180px 180px',gap:10,marginBottom:14}}>
@@ -1836,7 +1882,7 @@ function CestinoTab({ currentAdmin }) {
   return (
     <div style={{padding:28,overflowY:'auto',height:'100vh',boxSizing:'border-box'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
-        <div><div style={{fontWeight:600,fontSize:18}}>🗑️ Cestino</div><div style={{fontSize:13,color:'#888',marginTop:2}}>Rapporti eliminati · {rows.length} totali · ripristinabili</div></div>
+        <div><div style={{fontWeight:600,fontSize:T.f.h,display:'flex',alignItems:'center',gap:9,color:T.c.text}}><I.trash size={18} /> Cestino</div><div style={{fontSize:T.f.md,color:T.c.textMuted,marginTop:4}}>Rapporti eliminati · {rows.length} totali · ripristinabili</div></div>
         <button onClick={load} style={{padding:'7px 12px',border:'1px solid #ddd',borderRadius:7,background:'#fff',cursor:'pointer',fontSize:12,fontFamily:'inherit'}}>⟳ Aggiorna</button>
       </div>
       <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Cerca N°, cliente o agente…" style={{width:'100%',padding:'10px 13px',border:'1px solid #ddd',borderRadius:9,fontSize:14,marginBottom:14,boxSizing:'border-box',fontFamily:'inherit'}} />
@@ -1904,7 +1950,7 @@ function RegolamentoTab() {
   return (
     <div style={{padding:28,maxWidth:700,height:'100vh',boxSizing:'border-box',display:'flex',flexDirection:'column'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
-        <div><div style={{fontWeight:600,fontSize:18}}>📄 Regolamento</div><div style={{fontSize:13,color:'#888',marginTop:2}}>Versione corrente: v{version}</div></div>
+        <div><div style={{fontWeight:600,fontSize:T.f.h,display:'flex',alignItems:'center',gap:9,color:T.c.text}}><I.fileText size={18} /> Regolamento</div><div style={{fontSize:T.f.md,color:T.c.textMuted,marginTop:4}}>Versione corrente: v{version}</div></div>
         <button onClick={save} disabled={saving} style={{padding:'9px 20px',background:GREEN,color:'#fff',border:'none',borderRadius:9,cursor:'pointer',fontSize:13,fontWeight:500,fontFamily:'inherit'}}>
           {saving?'Salvataggio…':saved?'✓ Salvato':'Salva nuova versione'}
         </button>
