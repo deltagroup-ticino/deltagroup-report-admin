@@ -227,26 +227,29 @@ function AppName({ dark = false }) {
 }
 
 // ── SIDEBAR ───────────────────────────────────────────────────────
-const NAV = [
-  { id:'inbox',         icon:'📥', label:'Inbox' },
-  { id:'spedisci',      icon:'📤', label:'Spedisci' },
-  { id:'clienti',       icon:'🏢', label:'Clienti' },
-  { id:'collaboratori', icon:'👥', label:'Collaboratori' },
-  { id:'amministratori',icon:'🔑', label:'Amministratori' },
-  { id:'regolamento',   icon:'📄', label:'Regolamento' },
+const NAV_ALL = [
+  { id:'inbox',         icon:'📥', label:'Inbox',         super: false },
+  { id:'spedisci',      icon:'📤', label:'Spedisci',      super: false },
+  { id:'clienti',       icon:'🏢', label:'Clienti',       super: false },
+  { id:'collaboratori', icon:'👥', label:'Collaboratori', super: true },
+  { id:'amministratori',icon:'🔑', label:'Amministratori',super: true },
+  { id:'cronologia',    icon:'📜', label:'Cronologia',    super: true },
+  { id:'regolamento',   icon:'📄', label:'Regolamento',   super: true },
 ];
 
-function Sidebar({ active, onNav, onLogout, adminName }) {
+function Sidebar({ active, onNav, onLogout, adminName, isSuper }) {
+  const items = NAV_ALL.filter(i => !i.super || isSuper);
   return (
     <div style={{width:200,background:'#0f3d0f',display:'flex',flexDirection:'column',height:'100vh',flexShrink:0}}>
       <div style={{padding:'18px 16px 14px',borderBottom:'1px solid rgba(255,255,255,0.1)'}}>
         <AppName />
         <div style={{fontSize:10,color:'rgba(255,255,255,0.45)',marginTop:5}}>
           Pannello Amministratore{adminName ? ' ' : ''}<span style={{color:'rgba(255,255,255,0.85)',fontWeight:600}}>{adminName||''}</span>
+          {isSuper && <span style={{marginLeft:6,fontSize:9,padding:'1px 5px',background:'#b87333',color:'#fff',borderRadius:3,letterSpacing:0.5}}>SUPER</span>}
         </div>
       </div>
       <nav style={{flex:1,padding:'12px 8px',overflowY:'auto'}}>
-        {NAV.map(item => (
+        {items.map(item => (
           <button key={item.id} onClick={() => onNav(item.id)} style={{width:'100%',display:'flex',alignItems:'center',gap:10,padding:'10px 12px',borderRadius:8,border:'none',cursor:'pointer',marginBottom:2,fontSize:14,fontFamily:'inherit',background:active===item.id?'rgba(255,255,255,0.12)':'transparent',color:active===item.id?'#fff':'rgba(255,255,255,0.6)',fontWeight:active===item.id?500:400}}>
             <span style={{fontSize:17}}>{item.icon}</span>{item.label}
           </button>
@@ -297,12 +300,16 @@ function AdminLogin({ onLogin }) {
     setSubmitting(true);
     try {
       const c = await sb();
-      const { data, error } = await c.rpc('verify_admin_login', { p_admin_name: adminObj.admin_name, p_pin: pin });
+      const { data, error } = await c.rpc('verify_admin_login', {
+        p_admin_name: adminObj.admin_name,
+        p_pin: pin,
+        p_user_agent: (navigator.userAgent||'').slice(0, 200),
+      });
       if (error) throw error;
       if (!data || data.length === 0) { setError('PIN non corretto o utente disabilitato.'); setPin(''); setSubmitting(false); return; }
       const admin = data[0];
       await c.rpc('admin_touch_last_login', { p_admin_id: admin.id });
-      onLogin({ id: admin.id, admin_name: admin.admin_name });
+      onLogin({ id: admin.id, admin_name: admin.admin_name, is_super: !!admin.is_super, token: admin.token });
     } catch(e) {
       setError('Errore di accesso. Riprova.');
       setSubmitting(false);
@@ -1105,7 +1112,8 @@ function ClientiTab() {
 // ═══════════════════════════════════════════════════════════════════
 // TAB: COLLABORATORI
 // ═══════════════════════════════════════════════════════════════════
-function CollaboratoriTab() {
+function CollaboratoriTab({ currentAdmin }) {
+  const isSuper = !!currentAdmin?.is_super;
   const [collabs, setCollabs] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -1170,7 +1178,7 @@ function CollaboratoriTab() {
             {filtered.map((cl,i) => (
               <tr key={cl.id} style={{borderTop:i>0?'0.5px solid #f0f0f0':'none'}}>
                 <td style={{padding:'11px 14px',fontWeight:500}}>{cl.agent_name}</td>
-                <td style={{padding:'11px 14px',fontFamily:'monospace',fontSize:14,color:cl.pin_revealed?'#aaa':GREEN,fontWeight:600}}>{cl.pin_revealed?'••••••':cl.pin}</td>
+                <td style={{padding:'11px 14px',fontFamily:'monospace',fontSize:14,color:cl.pin_revealed?'#aaa':GREEN,fontWeight:600}}>{isSuper?(cl.pin_revealed?'••••••':cl.pin):'••••••'}</td>
                 <td style={{padding:'11px 14px',fontSize:12,color:'#888'}}>{cl.pin_revealed?fmtDT(cl.pin_revealed_at):'— Non ancora'}</td>
                 <td style={{padding:'11px 14px'}}>{cl.regulation_accepted?<span style={{color:GREEN}}>✓ Accettato</span>:<span style={{color:'#ccc'}}>— Non ancora</span>}</td>
                 <td style={{padding:'11px 14px'}}>{cl.is_active?<span style={{color:GREEN,fontWeight:500}}>● Attivo</span>:<span style={{color:'#999'}}>○ Disabilitato</span>}</td>
@@ -1222,7 +1230,7 @@ function AmministratoriTab({ currentAdmin }) {
     try {
       const c = await sb();
       const pin = genPin();
-      const { data, error } = await c.rpc('create_admin', { p_admin_name: cleanName, p_pin: pin });
+      const { data, error } = await c.rpc('create_admin', { p_token: currentAdmin.token, p_admin_name: cleanName, p_pin: pin });
       if (error) throw error;
       const created = Array.isArray(data) ? data[0] : data;
       if (created) setAdmins(prev => [...prev, created].sort((a,b) => a.admin_name.localeCompare(b.admin_name)));
@@ -1236,7 +1244,7 @@ function AmministratoriTab({ currentAdmin }) {
     try {
       const c = await sb();
       const pin = genPin();
-      const { error } = await c.rpc('reset_admin_pin', { p_admin_id: id, p_new_pin: pin });
+      const { error } = await c.rpc('reset_admin_pin', { p_token: currentAdmin.token, p_admin_id: id, p_new_pin: pin });
       if (error) throw error;
       alert(`Nuovo PIN per ${name}: ${pin}\n\nComunicalo all'utente. Non sarà più visibile dopo questa schermata.`);
     } catch(e) { console.error(e); alert('Errore.'); }
@@ -1246,9 +1254,21 @@ function AmministratoriTab({ currentAdmin }) {
     if (a.id === currentAdmin?.id && a.is_active) { alert('Non puoi disabilitare te stesso.'); return; }
     try {
       const c = await sb();
-      const { error } = await c.rpc('set_admin_active', { p_admin_id: a.id, p_is_active: !a.is_active });
+      const { error } = await c.rpc('set_admin_active', { p_token: currentAdmin.token, p_admin_id: a.id, p_is_active: !a.is_active });
       if (error) throw error;
       setAdmins(prev => prev.map(x => x.id===a.id ? {...x, is_active: !a.is_active} : x));
+    } catch(e) { console.error(e); alert('Errore.'); }
+  };
+
+  const toggleSuper = async (a) => {
+    if (a.id === currentAdmin?.id) { alert('Non puoi cambiare il tuo livello.'); return; }
+    const next = !a.is_super;
+    if (!confirm(`${next?'Rendere':'Togliere'} super-admin ${a.admin_name}?\n\n${next?'Avrà pieno accesso al pannello.':'Avrà accesso solo a Inbox, Spedisci e Clienti.'}`)) return;
+    try {
+      const c = await sb();
+      const { error } = await c.rpc('set_admin_super', { p_token: currentAdmin.token, p_admin_id: a.id, p_is_super: next });
+      if (error) throw error;
+      setAdmins(prev => prev.map(x => x.id===a.id ? {...x, is_super: next} : x));
     } catch(e) { console.error(e); alert('Errore.'); }
   };
 
@@ -1259,7 +1279,7 @@ function AmministratoriTab({ currentAdmin }) {
     if (typed !== 'ELIMINA') { alert('Eliminazione annullata.'); return; }
     try {
       const c = await sb();
-      const { error } = await c.rpc('delete_admin', { p_admin_id: a.id });
+      const { error } = await c.rpc('delete_admin', { p_token: currentAdmin.token, p_admin_id: a.id });
       if (error) throw error;
       setAdmins(prev => prev.filter(x => x.id !== a.id));
     } catch(e) { console.error(e); alert('Errore.'); }
@@ -1292,16 +1312,20 @@ function AmministratoriTab({ currentAdmin }) {
                 <td style={{padding:'11px 14px',fontWeight:500}}>
                   {a.admin_name}
                   {a.id===currentAdmin?.id && <span style={{marginLeft:8,fontSize:10,padding:'2px 6px',background:GREEN_LIGHT,color:'#1a5c1a',borderRadius:4}}>tu</span>}
+                  {a.is_super && <span style={{marginLeft:6,fontSize:9,padding:'1px 5px',background:'#b87333',color:'#fff',borderRadius:3,letterSpacing:0.5}}>SUPER</span>}
                 </td>
                 <td style={{padding:'11px 14px',fontSize:11,color:'#888',fontStyle:'italic'}}>•••••• <span style={{fontSize:10}}>(non visualizzabile)</span></td>
                 <td style={{padding:'11px 14px',fontSize:12,color:'#888'}}>{a.last_login_at?fmtDT(a.last_login_at):'— Mai'}</td>
                 <td style={{padding:'11px 14px'}}>{a.is_active?<span style={{color:GREEN,fontWeight:500}}>● Attivo</span>:<span style={{color:'#999'}}>○ Disabilitato</span>}</td>
                 <td style={{padding:'11px 14px'}}>
-                  <div style={{display:'flex',gap:6}}>
+                  <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
                     <button onClick={() => toggleActive(a)} disabled={a.id===currentAdmin?.id} style={{padding:'4px 10px',border:`1px solid ${a.is_active?'#ffcccc':'#ccffcc'}`,borderRadius:6,background:'#fff',cursor:a.id===currentAdmin?.id?'not-allowed':'pointer',fontSize:11,color:a.is_active?'#cc0000':GREEN,fontFamily:'inherit',opacity:a.id===currentAdmin?.id?0.4:1}}>
                       {a.is_active?'Disabilita':'Abilita'}
                     </button>
                     <button onClick={() => resetPin(a.id,a.admin_name)} style={{padding:'4px 10px',border:'1px solid #ddd',borderRadius:6,background:'#fff',cursor:'pointer',fontSize:11,fontFamily:'inherit'}}>Reset PIN</button>
+                    <button onClick={() => toggleSuper(a)} disabled={a.id===currentAdmin?.id} style={{padding:'4px 10px',border:'1px solid #d8b78a',borderRadius:6,background:'#fff',color:'#9a5a14',cursor:a.id===currentAdmin?.id?'not-allowed':'pointer',fontSize:11,fontFamily:'inherit',opacity:a.id===currentAdmin?.id?0.4:1}}>
+                      {a.is_super?'Togli super':'Rendi super'}
+                    </button>
                     <button onClick={() => removeAdmin(a)} disabled={a.id===currentAdmin?.id} style={{padding:'4px 10px',border:'1px solid #f0c8c8',borderRadius:6,background:'#fff',color:'#a32d2d',cursor:a.id===currentAdmin?.id?'not-allowed':'pointer',fontSize:11,fontFamily:'inherit',opacity:a.id===currentAdmin?.id?0.4:1}}>Elimina</button>
                   </div>
                 </td>
@@ -1363,39 +1387,86 @@ export default function App() {
   const [currentAdmin, setCurrentAdmin] = useState(() => {
     try {
       const s = JSON.parse(localStorage.getItem(ADMIN_SESSION_KEY));
-      if (!s || !s.id || !s.admin_name) return null;
+      if (!s || !s.id || !s.admin_name || !s.token) return null;
       if (s.savedAt && Date.now() - s.savedAt > ADMIN_SESSION_DAYS * 24 * 60 * 60 * 1000) {
         localStorage.removeItem(ADMIN_SESSION_KEY);
         return null;
       }
-      return { id: s.id, admin_name: s.admin_name };
+      return { id: s.id, admin_name: s.admin_name, is_super: !!s.is_super, token: s.token };
     } catch {}
     return null;
   });
   const [activeTab, setActiveTab] = useState('inbox');
 
   const handleLogin = (admin) => {
-    localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ id: admin.id, admin_name: admin.admin_name, savedAt: Date.now() }));
-    setCurrentAdmin(admin);
+    localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({
+      id: admin.id, admin_name: admin.admin_name, is_super: !!admin.is_super, token: admin.token, savedAt: Date.now()
+    }));
+    setCurrentAdmin({ id: admin.id, admin_name: admin.admin_name, is_super: !!admin.is_super, token: admin.token });
   };
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      if (currentAdmin?.token) {
+        const c = await sb();
+        await c.rpc('logout_session', { p_token: currentAdmin.token });
+      }
+    } catch {}
     localStorage.removeItem(ADMIN_SESSION_KEY);
     setCurrentAdmin(null);
     setActiveTab('inbox');
   };
 
+  // Periodic + on-focus session validation: if invalidated server-side, force re-login
+  useEffect(() => {
+    if (!currentAdmin?.token) return;
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const c = await sb();
+        const { data, error } = await c.rpc('validate_session', { p_token: currentAdmin.token });
+        if (cancelled) return;
+        if (error) return;
+        if (!data || data.length === 0) {
+          localStorage.removeItem(ADMIN_SESSION_KEY);
+          setCurrentAdmin(null);
+          alert('Sessione terminata. Effettua di nuovo l’accesso.');
+        } else {
+          const fresh = data[0];
+          if (fresh.is_super !== currentAdmin.is_super) {
+            const updated = { ...currentAdmin, is_super: !!fresh.is_super };
+            setCurrentAdmin(updated);
+            const stored = JSON.parse(localStorage.getItem(ADMIN_SESSION_KEY) || '{}');
+            localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ ...stored, is_super: !!fresh.is_super }));
+          }
+        }
+      } catch {}
+    };
+    check();
+    const id = setInterval(() => { if (!document.hidden) check(); }, 60000);
+    const onFocus = () => check();
+    window.addEventListener('focus', onFocus);
+    return () => { cancelled = true; clearInterval(id); window.removeEventListener('focus', onFocus); };
+  }, [currentAdmin?.token]);
+
   if (!currentAdmin) return <AdminLogin onLogin={handleLogin} />;
+
+  const isSuper = !!currentAdmin.is_super;
+  const allowedTab = (tab) => {
+    const item = NAV_ALL.find(i => i.id === tab);
+    return item && (!item.super || isSuper);
+  };
+  const safeTab = allowedTab(activeTab) ? activeTab : 'inbox';
 
   return (
     <div style={{display:'flex',height:'100vh',overflow:'hidden',fontFamily:'-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'}}>
-      <Sidebar active={activeTab} onNav={setActiveTab} onLogout={handleLogout} adminName={currentAdmin.admin_name} />
+      <Sidebar active={safeTab} onNav={setActiveTab} onLogout={handleLogout} adminName={currentAdmin.admin_name} isSuper={isSuper} />
       <div style={{flex:1,overflow:'hidden'}}>
-        {activeTab==='inbox'           && <InboxTab currentAdmin={currentAdmin} />}
-        {activeTab==='spedisci'        && <SpedisciTab currentAdmin={currentAdmin} />}
-        {activeTab==='clienti'         && <ClientiTab />}
-        {activeTab==='collaboratori'   && <CollaboratoriTab />}
-        {activeTab==='amministratori'  && <AmministratoriTab currentAdmin={currentAdmin} />}
-        {activeTab==='regolamento'     && <RegolamentoTab />}
+        {safeTab==='inbox'           && <InboxTab currentAdmin={currentAdmin} />}
+        {safeTab==='spedisci'        && <SpedisciTab currentAdmin={currentAdmin} />}
+        {safeTab==='clienti'         && <ClientiTab />}
+        {safeTab==='collaboratori'   && isSuper && <CollaboratoriTab currentAdmin={currentAdmin} />}
+        {safeTab==='amministratori'  && isSuper && <AmministratoriTab currentAdmin={currentAdmin} />}
+        {safeTab==='regolamento'     && isSuper && <RegolamentoTab />}
       </div>
     </div>
   );
