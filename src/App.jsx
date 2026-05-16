@@ -646,28 +646,58 @@ function AdminLogin({ onLogin }) {
 // ═══════════════════════════════════════════════════════════════════
 // TAB: INBOX
 // ═══════════════════════════════════════════════════════════════════
-function DayRow({ date, stats, isSelected, isToday, status, onClick }) {
+function MonthHeader({ label, count }) {
+  return (
+    <div style={{
+      position:'sticky', top:0, zIndex:1,
+      padding:'8px 14px',
+      background:T.c.bg,
+      borderBottom:`1px solid ${T.c.border}`,
+      fontSize:T.f.xs-1, color:T.c.textMuted, fontWeight:600,
+      letterSpacing:0.6, textTransform:'uppercase',
+      display:'flex', justifyContent:'space-between', alignItems:'center', gap:8,
+    }}>
+      <span>{label}</span>
+      <span style={{color:T.c.textFaint,fontWeight:500,letterSpacing:0}}>{count} {count===1?'giorno':'giorni'}</span>
+    </div>
+  );
+}
+
+function CountChip({ value, color, bg, border, title }) {
+  if (!value) return null;
+  return (
+    <span title={title} style={{
+      display:'inline-flex', alignItems:'center', justifyContent:'center',
+      minWidth:20, padding:'2px 6px',
+      fontSize:T.f.xs-1, fontWeight:600,
+      color, background:bg, border:`1px solid ${border}`,
+      borderRadius:T.r.sm, lineHeight:1.2,
+    }}>{value}</span>
+  );
+}
+
+function DayRow({ date, stats, isSelected, isToday, onClick }) {
   const d = new Date(date+'T12:00:00');
   const [hover, setHover] = useState(false);
   const bg = isSelected ? T.c.greenLight : (hover ? T.c.greenSoft : T.c.surface);
   return (
-    <div onClick={onClick} onMouseEnter={()=>setHover(true)} onMouseLeave={()=>setHover(false)} style={{padding:'11px 14px',cursor:'pointer',borderBottom:`1px solid ${T.c.border}`,background:bg,display:'flex',alignItems:'center',gap:12,transition:'background 0.1s',position:'relative'}}>
+    <div onClick={onClick} onMouseEnter={()=>setHover(true)} onMouseLeave={()=>setHover(false)} style={{padding:'12px 14px',cursor:'pointer',borderBottom:`1px solid ${T.c.border}`,background:bg,display:'flex',alignItems:'center',gap:12,transition:'background 0.1s',position:'relative'}}>
       {isSelected && <span style={{position:'absolute',left:0,top:0,bottom:0,width:3,background:T.c.green}} />}
-      <div style={{textAlign:'center',minWidth:36}}>
-        <div style={{fontSize:T.f.h+2,fontWeight:600,lineHeight:1,color:isSelected?T.c.green:T.c.text}}>{d.getDate()}</div>
-        <div style={{fontSize:T.f.xs-1,color:T.c.textFaint,marginTop:2,textTransform:'uppercase',letterSpacing:0.5}}>{MONTHS_SHORT[d.getMonth()]}</div>
+      <div style={{textAlign:'center',minWidth:38}}>
+        <div style={{fontSize:T.f.h+4,fontWeight:600,lineHeight:1,color:isSelected?T.c.green:T.c.text}}>{d.getDate()}</div>
+        <div style={{fontSize:T.f.xs-1,color:T.c.textFaint,marginTop:3,textTransform:'uppercase',letterSpacing:0.5}}>{DAYS_SHORT[d.getDay()]}</div>
       </div>
       <div style={{flex:1,minWidth:0}}>
-        <div style={{fontSize:T.f.md,fontWeight:isToday?600:500,color:T.c.text}}>{isToday?'Oggi':DAYS_SHORT[d.getDay()]+' '+d.getDate()+' '+MONTHS_SHORT[d.getMonth()]}</div>
-        <div style={{fontSize:T.f.xs,color:T.c.textMuted,marginTop:2}}>
-          {stats.total} {stats.total===1?'rapporto':'rapporti'}{stats.submitted>0?` · ${stats.submitted} non letti`:stats.read>0?` · ${stats.read} da inviare`:' · tutti inviati'}
+        <div style={{fontSize:T.f.md,fontWeight:isToday?600:500,color:T.c.text}}>
+          {isToday ? 'Oggi' : `${DAYS_SHORT[d.getDay()]} ${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`}
+          {stats.late>0 && <span style={{marginLeft:8,fontSize:T.f.xs-1,background:T.c.warningBg,color:T.c.warningText,padding:'1px 6px',borderRadius:3,border:`1px solid ${T.c.warningBorder}`,fontWeight:500}}>+{stats.late} ritardo</span>}
         </div>
-        {stats.late>0 && <span style={{fontSize:T.f.xs-1,background:T.c.warningBg,color:T.c.warningText,padding:'1px 6px',borderRadius:3,marginTop:4,display:'inline-block',border:`1px solid ${T.c.warningBorder}`}}>+{stats.late} ritardo</span>}
-      </div>
-      <div>
-        {status==='error' && <div title="Non letti" style={{width:10,height:10,borderRadius:'50%',background:T.c.danger}} />}
-        {status==='warning' && <div title="Da inviare" style={{width:10,height:10,borderRadius:'50%',background:T.c.warning}} />}
-        {status==='ok' && <span title="Tutti inviati" style={{color:T.c.green,display:'inline-flex'}}><I.check size={15} /></span>}
+        <div style={{fontSize:T.f.xs,color:T.c.textMuted,marginTop:3,display:'flex',alignItems:'center',gap:5,flexWrap:'wrap'}}>
+          <span>{stats.total} {stats.total===1?'rapporto':'rapporti'}</span>
+          <CountChip value={stats.submitted} color={T.c.dangerText} bg={T.c.dangerBg} border={T.c.dangerBorder} title="Da leggere" />
+          <CountChip value={stats.read} color={T.c.warningText} bg={T.c.warningBg} border={T.c.warningBorder} title="Da inviare" />
+          <CountChip value={stats.sent} color="#1a5c1a" bg={T.c.greenLight} border="#cfe5b8" title="Inviati" />
+        </div>
       </div>
     </div>
   );
@@ -675,15 +705,22 @@ function DayRow({ date, stats, isSelected, isToday, status, onClick }) {
 
 function ReportRow({ report, isSelected, onClick }) {
   const [hover, setHover] = useState(false);
-  const accent = report.status==='sent_to_client' ? T.c.green : report.status==='read' ? T.c.warning : T.c.danger;
-  const bg = isSelected ? T.c.greenLight : (hover ? T.c.surfaceHover : T.c.surface);
+  const isUnread = report.status === 'submitted';
+  const isSent = report.status === 'sent_to_client';
+  const accent = isSent ? T.c.green : report.status==='read' ? T.c.warning : T.c.danger;
+  const bg = isSelected
+    ? T.c.greenLight
+    : isUnread
+      ? (hover ? '#fde7e7' : '#fef6f6')
+      : (hover ? T.c.surfaceHover : T.c.surface);
   return (
-    <div onClick={onClick} onMouseEnter={()=>setHover(true)} onMouseLeave={()=>setHover(false)} style={{padding:'12px 14px',cursor:'pointer',borderBottom:`1px solid ${T.c.border}`,borderLeft:`3px solid ${accent}`,background:bg,transition:'background 0.1s'}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:4,gap:6}}>
-        <div style={{fontWeight:500,fontSize:T.f.md,minWidth:0,color:T.c.text}}>{report.submitted_by_name}</div>
-        <StatusBadge status={report.status} />
+    <div onClick={onClick} onMouseEnter={()=>setHover(true)} onMouseLeave={()=>setHover(false)} style={{padding:'12px 14px',cursor:'pointer',borderBottom:`1px solid ${T.c.border}`,borderLeft:`3px solid ${accent}`,background:bg,transition:'background 0.1s',opacity:isSent?0.78:1,position:'relative'}}>
+      {isUnread && <span style={{position:'absolute',top:14,right:14,width:8,height:8,borderRadius:'50%',background:T.c.danger,boxShadow:`0 0 0 3px ${T.c.dangerBg}`}} title="Da leggere" />}
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:4,gap:10}}>
+        <div style={{fontWeight:isUnread?600:500,fontSize:T.f.md,minWidth:0,color:isUnread?T.c.dangerText:T.c.text,paddingRight:isUnread?16:0}}>{report.submitted_by_name}</div>
+        {!isUnread && <StatusBadge status={report.status} />}
       </div>
-      <div style={{fontSize:T.f.sm,color:T.c.textMuted,marginBottom:6}}>{report.client_name} · {report.address}</div>
+      <div style={{fontSize:T.f.sm,color:T.c.textMuted,marginBottom:6,fontWeight:isUnread?500:400}}>{report.client_name} · {report.address}</div>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6}}>
         <TypeBadge type={report.report_type} />
         <div style={{fontSize:T.f.xs-1,color:T.c.textFaint}}>{fmtTime(report.submitted_at)}</div>
@@ -874,9 +911,27 @@ function InboxTab({ currentAdmin }) {
         </div>
         <div style={{flex:1,overflowY:'auto'}}>
           {loading && <div style={{padding:20,textAlign:'center',color:'#888',fontSize:13}}>Caricamento…</div>}
-          {filteredDays.map(([date,stats]) => (
-            <DayRow key={date} date={date} stats={stats} isSelected={selectedDay===date} isToday={date===todayISO()} onClick={() => loadDay(date)} status={dayStatus(stats)} />
-          ))}
+          {(() => {
+            const out = [];
+            let lastKey = null;
+            // first pass: count days per month
+            const monthCounts = {};
+            filteredDays.forEach(([d]) => {
+              const dt = new Date(d+'T12:00:00');
+              const k = `${dt.getFullYear()}-${dt.getMonth()}`;
+              monthCounts[k] = (monthCounts[k]||0) + 1;
+            });
+            filteredDays.forEach(([date, stats]) => {
+              const dt = new Date(date+'T12:00:00');
+              const k = `${dt.getFullYear()}-${dt.getMonth()}`;
+              if (k !== lastKey) {
+                lastKey = k;
+                out.push(<MonthHeader key={'h-'+k} label={`${MONTHS_LONG[dt.getMonth()]} ${dt.getFullYear()}`} count={monthCounts[k]} />);
+              }
+              out.push(<DayRow key={date} date={date} stats={stats} isSelected={selectedDay===date} isToday={date===todayISO()} onClick={() => loadDay(date)} />);
+            });
+            return out;
+          })()}
           {!loading && filteredDays.length===0 && <div style={{padding:30,textAlign:'center',color:T.c.textFaint,fontSize:T.f.md}}>Nessun dato</div>}
         </div>
       </div>
@@ -886,9 +941,14 @@ function InboxTab({ currentAdmin }) {
         {!selectedDay
           ? <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:T.c.textFaint,fontSize:T.f.md}}><div style={{textAlign:'center'}}><div style={{color:T.c.borderHover,marginBottom:12,display:'flex',justifyContent:'center'}}><I.clock size={36} /></div>Seleziona un giorno</div></div>
           : <>
-            <div style={{padding:'14px',borderBottom:'1px solid #eee'}}>
-              <div style={{fontWeight:500,fontSize:14}}>{fromISO(selectedDay)}</div>
-              <div style={{fontSize:12,color:'#888'}}>{dayReports.length} rapporti</div>
+            <div style={{padding:'14px',borderBottom:`1px solid ${T.c.border}`}}>
+              <div style={{fontWeight:600,fontSize:T.f.lg,color:T.c.text}}>{fromISO(selectedDay)}</div>
+              <div style={{fontSize:T.f.xs,color:T.c.textMuted,marginTop:5,display:'flex',alignItems:'center',gap:5,flexWrap:'wrap'}}>
+                <span>{dayReports.length} {dayReports.length===1?'rapporto':'rapporti'}</span>
+                <CountChip value={dayReports.filter(r=>r.status==='submitted').length} color={T.c.dangerText} bg={T.c.dangerBg} border={T.c.dangerBorder} title="Da leggere" />
+                <CountChip value={dayReports.filter(r=>r.status==='read').length} color={T.c.warningText} bg={T.c.warningBg} border={T.c.warningBorder} title="Da inviare" />
+                <CountChip value={dayReports.filter(r=>r.status==='sent_to_client').length} color="#1a5c1a" bg={T.c.greenLight} border="#cfe5b8" title="Inviati" />
+              </div>
             </div>
             <div style={{flex:1,overflowY:'auto'}}>
               {loadingDay && <div style={{padding:20,textAlign:'center',color:'#888',fontSize:13}}>Caricamento…</div>}
