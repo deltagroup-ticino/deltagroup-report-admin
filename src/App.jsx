@@ -234,6 +234,7 @@ const NAV_ALL = [
   { id:'collaboratori', icon:'👥', label:'Collaboratori', super: true },
   { id:'amministratori',icon:'🔑', label:'Amministratori',super: true },
   { id:'cronologia',    icon:'📜', label:'Cronologia',    super: true },
+  { id:'cestino',       icon:'🗑️', label:'Cestino',       super: true },
   { id:'regolamento',   icon:'📄', label:'Regolamento',   super: true },
 ];
 
@@ -380,7 +381,7 @@ function InboxTab({ currentAdmin }) {
     setLoading(true);
     const c = await sb();
     const oneYearAgo = new Date(); oneYearAgo.setFullYear(oneYearAgo.getFullYear()-1);
-    const { data } = await c.from('dr_reports').select('id,service_date,status,is_late,report_type,submitted_at').gte('service_date', oneYearAgo.toISOString().split('T')[0]).order('service_date',{ascending:false});
+    const { data } = await c.from('dr_reports').select('id,service_date,status,is_late,report_type,submitted_at').gte('service_date', oneYearAgo.toISOString().split('T')[0]).is('deleted_at', null).order('service_date',{ascending:false});
     if (data) {
       const grouped = {};
       data.forEach(r => {
@@ -407,7 +408,7 @@ function InboxTab({ currentAdmin }) {
   const loadDay = async (date) => {
     setSelectedDay(date); setSelectedReport(null); setEditMode(false); setLoadingDay(true);
     const c = await sb();
-    const { data } = await c.from('dr_reports').select('*').eq('service_date', date).order('submitted_at',{ascending:false});
+    const { data } = await c.from('dr_reports').select('*').eq('service_date', date).is('deleted_at', null).order('submitted_at',{ascending:false});
     if (data) {
       setDayReports(data);
       const toRead = data.filter(r => r.status==='submitted').map(r => r.id);
@@ -498,23 +499,16 @@ function InboxTab({ currentAdmin }) {
   };
 
   const deleteReport = async (report) => {
-    const typed = prompt(
-      `ELIMINAZIONE DEFINITIVA\n\n`+
-      `Rapporto N° ${report.report_number}\n`+
-      `Cliente: ${report.client_name||'—'}\n`+
-      `Data: ${fromISO(report.service_date)}\n`+
-      `Da: ${report.submitted_by_name||'—'}\n\n`+
-      `Questa operazione è IRREVERSIBILE: il rapporto e tutta la sua cronologia verranno cancellati dal database.\n\n`+
-      `Digita ELIMINA (in maiuscolo) per confermare:`
-    );
-    if (typed === null) return;
-    if (typed !== 'ELIMINA') { alert('Eliminazione annullata: testo di conferma non corretto.'); return; }
+    const isSuper = !!currentAdmin?.is_super;
+    const intro = isSuper
+      ? `Spostare nel cestino il rapporto N° ${report.report_number}?\n\nIl rapporto verrà nascosto da Inbox/Spedisci e sarà visibile solo nella sezione Cestino (super-admin). Potrai ripristinarlo o eliminarlo definitivamente in seguito.`
+      : `Spostare nel cestino il rapporto N° ${report.report_number}?\n\nIl rapporto verrà nascosto da Inbox/Spedisci. Solo un super-admin potrà ripristinarlo o eliminarlo definitivamente.`;
+    if (!confirm(intro + `\n\nCliente: ${report.client_name||'—'} · Data: ${fromISO(report.service_date)}`)) return;
     try {
       const c = await sb();
-      await logAudit(currentAdmin, 'delete', report, { service_date: report.service_date, submitted_by: report.submitted_by_name });
-      await c.from('report_revisions').delete().eq('report_id', report.id);
-      const { error } = await c.from('dr_reports').delete().eq('id', report.id);
+      const { error } = await c.rpc('soft_delete_report', { p_token: currentAdmin.token, p_report_id: report.id });
       if (error) throw error;
+      await logAudit(currentAdmin, 'delete', report, { soft: true, service_date: report.service_date, submitted_by: report.submitted_by_name });
       setDayReports(prev => prev.filter(r => r.id !== report.id));
       setSelectedReport(null);
       setEditMode(false);
@@ -722,7 +716,7 @@ function InboxTab({ currentAdmin }) {
             {!editMode && (
               <div style={{marginBottom:16}}>
                 <button onClick={() => deleteReport(selectedReport)} style={{width:'100%',padding:'10px 14px',background:'#fff',color:'#a32d2d',border:'1px solid #f0c8c8',borderRadius:9,cursor:'pointer',fontSize:13,fontFamily:'inherit',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
-                  🗑 Elimina rapporto (definitivo)
+                  🗑 Sposta nel cestino
                 </button>
               </div>
             )}
@@ -766,7 +760,7 @@ function SpedisciTab({ currentAdmin }) {
   const load = useCallback(async () => {
     const c = await sb();
     const [rpt, cli] = await Promise.all([
-      c.from('dr_reports').select('id,report_number,service_date,submitted_by_name,client_name,client_id,address,report_type,status,submitted_at').neq('status','sent_to_client').order('service_date',{ascending:false}),
+      c.from('dr_reports').select('id,report_number,service_date,submitted_by_name,client_name,client_id,address,report_type,status,submitted_at').neq('status','sent_to_client').is('deleted_at', null).order('service_date',{ascending:false}),
       c.from('report_clients').select('*').order('name'),
     ]);
     if (rpt.data) setReports(rpt.data);
@@ -781,6 +775,7 @@ function SpedisciTab({ currentAdmin }) {
     const { data } = await c.from('dr_reports')
       .select('id,report_number,service_date,submitted_by_name,client_name,address,report_type,sent_to_client_at,status')
       .eq('status','sent_to_client')
+      .is('deleted_at', null)
       .gte('service_date', oneYearAgo.toISOString().split('T')[0])
       .order('sent_to_client_at', { ascending: false });
     if (data) {
@@ -1451,6 +1446,95 @@ function CronologiaTab() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// TAB: CESTINO (soft-deleted reports, super-only)
+// ═══════════════════════════════════════════════════════════════════
+function CestinoTab({ currentAdmin }) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [busyId, setBusyId] = useState(null);
+
+  const load = async () => {
+    setLoading(true);
+    const c = await sb();
+    const { data } = await c.from('dr_reports').select('id,report_number,service_date,submitted_by_name,client_name,address,report_type,deleted_at,deleted_by_admin_name').not('deleted_at', 'is', null).order('deleted_at', { ascending: false });
+    if (data) setRows(data);
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, []);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(r => `${r.report_number||''} ${r.client_name||''} ${r.submitted_by_name||''}`.toLowerCase().includes(q));
+  }, [rows, search]);
+
+  const restore = async (r) => {
+    if (!confirm(`Ripristinare il rapporto N° ${r.report_number}?\n\nTornerà visibile in Inbox e Spedisci con lo stato precedente al cestino.`)) return;
+    setBusyId(r.id);
+    try {
+      const c = await sb();
+      const { error } = await c.rpc('restore_report', { p_token: currentAdmin.token, p_report_id: r.id });
+      if (error) throw error;
+      await logAudit(currentAdmin, 'restore', r, null);
+      setRows(prev => prev.filter(x => x.id !== r.id));
+    } catch(e) { console.error(e); alert('Errore durante il ripristino.'); }
+    setBusyId(null);
+  };
+
+  const hardDelete = async (r) => {
+    const typed = prompt(
+      `ELIMINAZIONE DEFINITIVA dal database\n\n`+
+      `Rapporto N° ${r.report_number}\n`+
+      `Cliente: ${r.client_name||'—'}\n`+
+      `Data: ${fromISO(r.service_date)}\n\n`+
+      `Questa operazione è IRREVERSIBILE: il rapporto e tutta la sua cronologia saranno cancellati per sempre.\n\n`+
+      `Digita ELIMINA (in maiuscolo) per confermare:`
+    );
+    if (typed === null) return;
+    if (typed !== 'ELIMINA') { alert('Eliminazione annullata.'); return; }
+    setBusyId(r.id);
+    try {
+      const c = await sb();
+      await logAudit(currentAdmin, 'hard_delete', r, { service_date: r.service_date });
+      const { error } = await c.rpc('hard_delete_report', { p_token: currentAdmin.token, p_report_id: r.id });
+      if (error) throw error;
+      setRows(prev => prev.filter(x => x.id !== r.id));
+    } catch(e) { console.error(e); alert('Errore.'); }
+    setBusyId(null);
+  };
+
+  return (
+    <div style={{padding:28,overflowY:'auto',height:'100vh',boxSizing:'border-box'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+        <div><div style={{fontWeight:600,fontSize:18}}>🗑️ Cestino</div><div style={{fontSize:13,color:'#888',marginTop:2}}>Rapporti eliminati · {rows.length} totali · ripristinabili</div></div>
+        <button onClick={load} style={{padding:'7px 12px',border:'1px solid #ddd',borderRadius:7,background:'#fff',cursor:'pointer',fontSize:12,fontFamily:'inherit'}}>⟳ Aggiorna</button>
+      </div>
+      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Cerca N°, cliente o agente…" style={{width:'100%',padding:'10px 13px',border:'1px solid #ddd',borderRadius:9,fontSize:14,marginBottom:14,boxSizing:'border-box',fontFamily:'inherit'}} />
+      {loading && <div style={{textAlign:'center',color:'#888',padding:30}}>Caricamento…</div>}
+      {!loading && filtered.length===0 && (
+        <div style={{textAlign:'center',color:'#aaa',padding:30,background:'#fafafa',borderRadius:10,border:'1px solid #eee'}}>
+          {rows.length===0?'Cestino vuoto 🎉':'Nessun risultato per la ricerca.'}
+        </div>
+      )}
+      <div style={{background:'#fff',borderRadius:12,border:'0.5px solid #e0e0e0',overflow:'hidden'}}>
+        {filtered.map((r,i) => (
+          <div key={r.id} style={{padding:'12px 16px',borderTop:i>0?'0.5px solid #f0f0f0':'none',display:'flex',alignItems:'center',gap:12}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:13,fontWeight:500}}>{r.report_number} <span style={{color:'#888',fontWeight:400}}>· {r.client_name||'—'}</span></div>
+              <div style={{fontSize:11,color:'#888',marginTop:2}}>Servizio {fromISO(r.service_date)} · da {r.submitted_by_name||'—'}</div>
+              <div style={{fontSize:11,color:'#a32d2d',marginTop:2}}>Eliminato {fmtDT(r.deleted_at)}{r.deleted_by_admin_name?` da ${r.deleted_by_admin_name}`:''}</div>
+            </div>
+            <button onClick={() => restore(r)} disabled={busyId===r.id} style={{padding:'7px 14px',border:'1px solid #ccebc5',borderRadius:8,background:'#fff',cursor:'pointer',fontSize:12,color:GREEN,fontFamily:'inherit',fontWeight:500,opacity:busyId===r.id?0.5:1}}>↩ Ripristina</button>
+            <button onClick={() => hardDelete(r)} disabled={busyId===r.id} style={{padding:'7px 14px',border:'1px solid #f0c8c8',borderRadius:8,background:'#fff',color:'#a32d2d',cursor:'pointer',fontSize:12,fontFamily:'inherit',opacity:busyId===r.id?0.5:1}}>🗑 Elimina definitivamente</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // TAB: REGOLAMENTO
 // ═══════════════════════════════════════════════════════════════════
 function RegolamentoTab() {
@@ -1608,6 +1692,7 @@ export default function App() {
         {safeTab==='collaboratori'   && isSuper && <CollaboratoriTab currentAdmin={currentAdmin} />}
         {safeTab==='amministratori'  && isSuper && <AmministratoriTab currentAdmin={currentAdmin} onlineAdmins={onlineAdmins} />}
         {safeTab==='cronologia'      && isSuper && <CronologiaTab />}
+        {safeTab==='cestino'         && isSuper && <CestinoTab currentAdmin={currentAdmin} />}
         {safeTab==='regolamento'     && isSuper && <RegolamentoTab />}
       </div>
     </div>
