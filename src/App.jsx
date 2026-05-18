@@ -40,6 +40,18 @@ async function loadJsPDF() {
   return window.jspdf.jsPDF;
 }
 
+async function urlToDataUrl(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`fetch ${url} -> ${res.status}`);
+  const blob = await res.blob();
+  return await new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onloadend = () => resolve(r.result);
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
+}
+
 // ── UTILS ─────────────────────────────────────────────────────────
 const fromISO = (iso) => { if (!iso) return '—'; const [y,m,d] = iso.split('-'); return `${d}/${m}/${y}`; };
 const fmtDT = (iso) => {
@@ -396,10 +408,14 @@ async function generateReportPDF(report) {
 
   // FIRME
   const fw = (CW-6)/2;
+  const [agentSigData, clientSigData] = await Promise.all([
+    report.agent_signature ? urlToDataUrl(report.agent_signature).catch(e => { console.error('agent signature fetch failed', e); return null; }) : null,
+    (!report.client_unavailable && report.client_signature) ? urlToDataUrl(report.client_signature).catch(e => { console.error('client signature fetch failed', e); return null; }) : null,
+  ]);
   // Agente
   doc.setTextColor(60,60,60); doc.setFontSize(8.5); doc.setFont('helvetica','bold'); doc.text('Firma Agente', M, y+5);
   doc.setDrawColor(150,150,150); doc.setLineWidth(0.3); doc.roundedRect(M, y+7, fw, 28, 2, 2, 'S');
-  if(report.agent_signature){ try{ doc.addImage(report.agent_signature,'PNG',M+1,y+8,fw-2,26); }catch(e){} }
+  if(agentSigData){ try{ doc.addImage(agentSigData,'PNG',M+1,y+8,fw-2,26); }catch(e){} }
 
   // Cliente
   const cx = M+fw+6;
@@ -414,7 +430,7 @@ async function generateReportPDF(report) {
   } else {
     if(report.client_signer_name){ doc.setTextColor(20,20,20); doc.setFontSize(8.5); doc.setFont('helvetica','bold'); doc.text(report.client_signer_name, cx+fw, y+5, {align:'right'}); }
     doc.setDrawColor(150,150,150); doc.setLineWidth(0.3); doc.roundedRect(cx,y+7,fw,28,2,2,'S');
-    if(report.client_signature){ try{ doc.addImage(report.client_signature,'PNG',cx+1,y+8,fw-2,26); }catch(e){} }
+    if(clientSigData){ try{ doc.addImage(clientSigData,'PNG',cx+1,y+8,fw-2,26); }catch(e){} }
     doc.setTextColor(130,130,130); doc.setFontSize(6.5); doc.setFont('helvetica','italic');
     doc.text("Con la firma si conferma l'impiego svolto e l'esattezza dei dati", cx+fw, y+38, {align:'right', maxWidth:fw});
   }
