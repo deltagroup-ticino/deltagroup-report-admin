@@ -726,6 +726,7 @@ function ReportRow({ report, isSelected, onClick }) {
         <div style={{fontSize:T.f.xs-1,color:T.c.textFaint}}>{fmtTime(report.submitted_at)}</div>
       </div>
       {report.is_late && <div style={{fontSize:T.f.xs-1,color:T.c.warningText,background:T.c.warningBg,padding:'2px 7px',borderRadius:4,marginTop:6,display:'inline-block',border:`1px solid ${T.c.warningBorder}`}}>Ricevuto in ritardo</div>}
+      {report.plan_validated_at && <div style={{fontSize:T.f.xs-1,color:'#1a5c1a',background:GREEN_LIGHT,padding:'2px 7px',borderRadius:4,marginTop:6,display:'inline-block',border:`1px solid ${GREEN_LIGHT}`}}>✓ Validato da PLAN</div>}
     </div>
   );
 }
@@ -970,6 +971,7 @@ function InboxTab({ currentAdmin }) {
                 <div style={{fontSize:18,fontWeight:600}}>{selectedReport.report_number}</div>
                 <div style={{fontSize:13,color:'#888',marginTop:2}}>Ricevuto {fmtDT(selectedReport.submitted_at)} \u00B7 da {selectedReport.submitted_by_name}</div>
                 {selectedReport.is_late && <span style={{fontSize:11,color:'#854f0b',background:'#faeeda',padding:'2px 8px',borderRadius:5,marginTop:4,display:'inline-block'}}>Ricevuto in ritardo rispetto alla data servizio</span>}
+                {selectedReport.plan_validated_at && <span style={{fontSize:11,color:'#1a5c1a',background:GREEN_LIGHT,padding:'2px 8px',borderRadius:5,marginTop:4,display:'inline-block'}}>✓ Ore validate da PLAN il {fmtDT(selectedReport.plan_validated_at)} · {selectedReport.plan_validated_by}</span>}
               </div>
               <div style={{display:'flex',gap:8,alignItems:'center',flexShrink:0}}>
                 <StatusBadge status={selectedReport.status} />
