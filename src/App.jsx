@@ -770,6 +770,23 @@ function InboxTab({ currentAdmin }) {
 
   useEffect(() => { loadDays(); }, []);
 
+  // Deep-link da PLAN: ?report=<id> apre direttamente quel rapporto
+  // (dal modale del registro mensile, dopo "Valida ore" → "Invia al cliente")
+  useEffect(() => {
+    const rid = new URLSearchParams(window.location.search).get('report');
+    if (!rid) return;
+    (async () => {
+      try {
+        const c = await sb();
+        const { data } = await c.from('dr_reports').select('*').eq('id', rid).is('deleted_at', null).single();
+        if (!data) return;
+        await loadDay(data.service_date);
+        openReport(data);
+      } catch { /* id sconosciuto: si resta sull'inbox */ }
+      try { window.history.replaceState(null, '', window.location.pathname); } catch {}
+    })();
+  }, []);
+
   useEffect(() => {
     sb().then(c => c.from('report_clients').select('name,email')).then(({data}) => {
       if (data) { const m = {}; data.forEach(cl => { m[cl.name.toLowerCase()] = cl.email; }); setClientsMap(m); }
