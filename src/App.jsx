@@ -726,7 +726,7 @@ function ReportRow({ report, isSelected, onClick }) {
         <div style={{fontSize:T.f.xs-1,color:T.c.textFaint}}>{fmtTime(report.submitted_at)}</div>
       </div>
       {report.is_late && <div style={{fontSize:T.f.xs-1,color:T.c.warningText,background:T.c.warningBg,padding:'2px 7px',borderRadius:4,marginTop:6,display:'inline-block',border:`1px solid ${T.c.warningBorder}`}}>Ricevuto in ritardo</div>}
-      {report.plan_validated_at && <div style={{fontSize:T.f.xs-1,color:'#1a5c1a',background:GREEN_LIGHT,padding:'2px 7px',borderRadius:4,marginTop:6,display:'inline-block',border:`1px solid ${GREEN_LIGHT}`}}>✓ Validato da PLAN</div>}
+      {report.plan_validated_at && <div style={{fontSize:T.f.xs-1,color:'#1a5c1a',background:GREEN_LIGHT,padding:'2px 7px',borderRadius:4,marginTop:6,display:'inline-block',border:`1px solid ${GREEN_LIGHT}`}}>✓ Validato in PLAN da {report.plan_validated_by} il {fmtDT(report.plan_validated_at)}</div>}
     </div>
   );
 }
