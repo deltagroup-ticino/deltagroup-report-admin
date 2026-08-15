@@ -3,7 +3,10 @@
   "short_name": "DR Admin",
   "description": "Gestione rapporti di servizio — Amministratore",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "launch_handler": { "client_mode": "navigate-existing" },
+  "handle_links": "preferred",
   "background_color": "#0f3d0f",
   "theme_color": "#1B6B1B",
   "icons": [
