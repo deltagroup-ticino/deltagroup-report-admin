@@ -456,10 +456,16 @@ function AppName({ dark = false }) {
   const c = dark ? GREEN : '#fff';
   const cs = dark ? '#555' : 'rgba(255,255,255,0.85)';
   return (
-    <span style={{display:'inline-flex',alignItems:'baseline'}}>
-      <span style={{fontSize:16,fontWeight:700,color:c,letterSpacing:0.5}}>DELTA</span>
-      <span style={{fontSize:11,color:cs}}>group</span>
-      <span style={{fontSize:16,fontWeight:700,color:c,letterSpacing:1.5,marginLeft:7}}>REPORT</span>
+    <span style={{display:'inline-flex',alignItems:'center',gap:7}}>
+      <svg width="18" height="18" viewBox="0 0 52 52" style={{flexShrink:0,display:'block'}} aria-hidden="true">
+        <rect width="52" height="52" rx="12" fill={GREEN}/>
+        <polygon points="26,12 44,41 8,41" fill="none" stroke="#fff" strokeWidth="4.5" strokeLinejoin="round" strokeLinecap="round"/>
+      </svg>
+      <span style={{display:'inline-flex',alignItems:'baseline'}}>
+        <span style={{fontSize:16,fontWeight:700,color:c,letterSpacing:0.5}}>DELTA</span>
+        <span style={{fontSize:11,color:cs}}>group</span>
+        <span style={{fontSize:16,fontWeight:700,color:c,letterSpacing:1.5,marginLeft:7}}>REPORT</span>
+      </span>
     </span>
   );
 }
