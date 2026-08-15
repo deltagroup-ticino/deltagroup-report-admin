@@ -851,22 +851,18 @@ function InboxTab({ currentAdmin }) {
       const blob = doc.output('blob');
       const file = new File([blob], `Rapporto_${report.report_number}.pdf`, {type:'application/pdf'});
       const email = clientsMap[(report.client_name||'').toLowerCase()] || '';
-      const subject = encodeURIComponent(`Rapporto di Servizio ${report.report_number} – ${report.client_name}`);
-      const body = encodeURIComponent(`Spettabile Cliente,\n\nin allegato trasmettiamo il Rapporto di Servizio N\u00B0 ${report.report_number} del ${fromISO(report.service_date)}.\n\nCordiali saluti,\nDELTAgroup Security & Services AG`);
-      let shareAborted = false;
-      if (navigator.canShare && navigator.canShare({files:[file]})) {
-        try {
-          await navigator.share({files:[file], title:`Rapporto ${report.report_number}`});
-        } catch(err) {
-          if (err && err.name === 'AbortError') shareAborted = true;
-          else throw err;
-        }
-      } else {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href=url; a.download=file.name; a.click();
-        window.open(`mailto:${email}?subject=${subject}&body=${body}`);
-      }
-      if (shareAborted) { setSendingId(null); return; }
+      const subject = encodeURIComponent(`DELTAgroup — Rapporto di servizio N° ${report.report_number} del ${fromISO(report.service_date)}${report.client_name?` — ${report.client_name}`:''}`);
+      const body = encodeURIComponent(`Buongiorno,\n\nin allegato trasmettiamo quanto in oggetto: Rapporto di servizio N\u00B0 ${report.report_number} del ${fromISO(report.service_date)}.\n\nRestiamo volentieri a disposizione per qualsiasi chiarimento.\n\nCordiali saluti,\nDELTAgroup Security & Services AG`);
+      // Flusso richiesto da Paolo (15.08, come i solleciti di PLAN):
+      // 1) il PDF si scarica, 2) si apre la mail in Outlook GIÀ PRONTA
+      // (destinatario dal registro clienti, oggetto e testo compilati);
+      // il PDF scaricato va solo trascinato in allegato (limite mailto:
+      // allegati automatici impossibili dal browser). Rimosso
+      // navigator.share: su Windows apriva il pannello di condivisione
+      // al posto di Outlook.
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url; a.download=file.name; a.click();
+      window.open(`mailto:${email}?subject=${subject}&body=${body}`);
       const confirmed = await confirmModal({
         title: 'Conferma invio al cliente',
         message: `Hai effettivamente inviato il rapporto N° ${report.report_number} a ${report.client_name||'cliente'}?\n\nConferma SOLO se l'email è stata spedita al cliente.\nIn caso contrario il rapporto resterà come "Da inviare".`,
