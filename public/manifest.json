@@ -7,6 +7,9 @@
   "display": "standalone",
   "launch_handler": { "client_mode": "navigate-existing" },
   "handle_links": "preferred",
+  "protocol_handlers": [
+    { "protocol": "web+deltareport", "url": "/?report=%s" }
+  ],
   "background_color": "#0f3d0f",
   "theme_color": "#1B6B1B",
   "icons": [

@@ -771,9 +771,13 @@ function InboxTab({ currentAdmin }) {
   useEffect(() => { loadDays(); }, []);
 
   // Deep-link da PLAN: ?report=<id> apre direttamente quel rapporto
-  // (dal modale del registro mensile, dopo "Valida ore" → "Invia al cliente")
+  // (dal modale del registro mensile, dopo "Valida ore" → "Invia al cliente").
+  // Arriva anche via protocollo web+deltareport:<id> (PWA installata):
+  // in quel caso il parametro contiene il prefisso dello schema, da togliere.
   useEffect(() => {
-    const rid = new URLSearchParams(window.location.search).get('report');
+    let rid = new URLSearchParams(window.location.search).get('report');
+    if (!rid) return;
+    rid = decodeURIComponent(rid).replace(/^web\+deltareport:\/?\/?/i, '').trim();
     if (!rid) return;
     (async () => {
       try {
