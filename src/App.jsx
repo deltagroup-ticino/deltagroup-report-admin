@@ -1596,7 +1596,11 @@ function CollaboratoriTab({ currentAdmin }) {
             {filtered.map((cl,i) => (
               <tr key={cl.id} style={{borderTop:i>0?'0.5px solid #f0f0f0':'none'}}>
                 <td style={{padding:'11px 14px',fontWeight:500}}>{cl.agent_name}</td>
-                <td style={{padding:'11px 14px',fontFamily:'monospace',fontSize:14,color:cl.pin_revealed?'#aaa':GREEN,fontWeight:600}}>{isSuper?(cl.pin_revealed?'••••••':cl.pin):'••••••'}</td>
+                {/* PIN sempre visibile a tutti gli admin (decisione Paolo
+                    15.08): così chi pianifica può ridarlo al collaboratore
+                    in caso di problemi. Verde = primo accesso non ancora
+                    fatto (PIN ancora da comunicare). */}
+                <td style={{padding:'11px 14px',fontFamily:'monospace',fontSize:14,color:cl.pin_revealed?'#555':GREEN,fontWeight:600}}>{cl.pin}</td>
                 <td style={{padding:'11px 14px',fontSize:12,color:'#888'}}>{cl.pin_revealed?fmtDT(cl.pin_revealed_at):'— Non ancora'}</td>
                 <td style={{padding:'11px 14px'}}>{cl.regulation_accepted?<span style={{color:GREEN}}>✓ Accettato</span>:<span style={{color:'#ccc'}}>— Non ancora</span>}</td>
                 <td style={{padding:'11px 14px'}}>{cl.is_active?<span style={{color:GREEN,fontWeight:500}}>● Attivo</span>:<span style={{color:'#999'}}>○ Disabilitato</span>}</td>
