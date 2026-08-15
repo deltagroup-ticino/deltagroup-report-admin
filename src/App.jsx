@@ -877,7 +877,12 @@ function InboxTab({ currentAdmin }) {
       if (!confirmed) { setSendingId(null); return; }
       const c = await sb();
       const sentAt = new Date().toISOString();
-      await c.from('dr_reports').update({status:'sent_to_client',sent_to_client_at:sentAt}).eq('id',report.id);
+      // sent_to_client_by: visibile anche in PLAN ("Inviato al cliente da …");
+      // fallback senza il campo se la colonna non esiste ancora sul DB
+      let { error: sendErr } = await c.from('dr_reports').update({status:'sent_to_client',sent_to_client_at:sentAt,sent_to_client_by:currentAdmin?.admin_name||null}).eq('id',report.id);
+      if (sendErr && /sent_to_client_by/i.test(sendErr.message||'')) {
+        await c.from('dr_reports').update({status:'sent_to_client',sent_to_client_at:sentAt}).eq('id',report.id);
+      }
       await logAudit(currentAdmin, 'send', report, { recipient: email || null });
       setSelectedReport(r => ({...r,status:'sent_to_client',sent_to_client_at:sentAt}));
       setDayReports(prev => prev.map(r => r.id===report.id ? {...r,status:'sent_to_client',sent_to_client_at:sentAt} : r));
