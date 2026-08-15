@@ -1581,13 +1581,33 @@ function CollaboratoriTab({ currentAdmin }) {
           {importing?'Import in corso…':'⬇ Importa da PLAN'}
         </button>
       </div>
+      {/* 📈 Adozione app (lancio): quanti hanno fatto il primo accesso,
+          chi manca (da sollecitare, PIN alla mano) e l'onda dei primi
+          accessi — richiesta Paolo 15.08 */}
+      {!loading && collabs.length>0 && (()=>{
+        const att=collabs.filter(c=>c.is_active);
+        const fatti=att.filter(c=>c.pin_revealed);
+        const manc=att.filter(c=>!c.pin_revealed);
+        const pct=att.length?Math.round(fatti.length/att.length*100):0;
+        const recenti=fatti.filter(c=>c.pin_revealed_at).sort((a,b)=>new Date(b.pin_revealed_at)-new Date(a.pin_revealed_at)).slice(0,5);
+        return <div style={{background:'#fff',border:'0.5px solid #e0e0e0',borderRadius:12,padding:'14px 16px',marginBottom:14}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,flexWrap:'wrap',gap:6}}>
+            <div style={{fontWeight:600,fontSize:14,color:T.c.text}}>📈 Adozione app</div>
+            <div style={{fontSize:13,color:'#555'}}><strong>{fatti.length}/{att.length}</strong> primi accessi · {pct}%</div>
+          </div>
+          <div style={{height:8,background:'#eee',borderRadius:4,overflow:'hidden',marginBottom:10}}><div style={{width:`${pct}%`,height:'100%',background:GREEN,transition:'width 0.4s'}}/></div>
+          {manc.length>0&&<div style={{fontSize:12,color:'#7a5b0b',lineHeight:1.7,marginBottom:recenti.length?6:0}}>⚪ Mai entrati ({manc.length}): {manc.map(c=>c.agent_name).join(', ')}</div>}
+          {recenti.length>0&&<div style={{fontSize:12,color:'#888',lineHeight:1.7}}>🕘 Ultimi primi accessi: {recenti.map(c=>`${c.agent_name} (${fmtDT(c.pin_revealed_at)})`).join(' · ')}</div>}
+          {manc.length===0&&<div style={{fontSize:12,color:GREEN,fontWeight:500}}>✓ Tutti i collaboratori attivi hanno attivato l'app.</div>}
+        </div>;
+      })()}
       <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Cerca collaboratore…" style={{width:'100%',padding:'10px 13px',border:'1px solid #ddd',borderRadius:9,fontSize:14,marginBottom:14,boxSizing:'border-box',fontFamily:'inherit'}} />
       {loading && <div style={{textAlign:'center',color:'#888',padding:30}}>Caricamento…</div>}
       <div style={{background:'#fff',borderRadius:12,border:'0.5px solid #e0e0e0',overflow:'hidden'}}>
         <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
           <thead>
             <tr style={{background:'#f5f5f5'}}>
-              {['Collaboratore','PIN','Primo accesso','Regolamento','Stato','Azioni'].map(h => (
+              {['Collaboratore','PIN','Primo accesso','Ultimo accesso','Regolamento','Stato','Azioni'].map(h => (
                 <th key={h} style={{padding:'10px 14px',textAlign:'left',fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:0.5}}>{h}</th>
               ))}
             </tr>
@@ -1602,6 +1622,7 @@ function CollaboratoriTab({ currentAdmin }) {
                     fatto (PIN ancora da comunicare). */}
                 <td style={{padding:'11px 14px',fontFamily:'monospace',fontSize:14,color:cl.pin_revealed?'#555':GREEN,fontWeight:600}}>{cl.pin}</td>
                 <td style={{padding:'11px 14px',fontSize:12,color:'#888'}}>{cl.pin_revealed?fmtDT(cl.pin_revealed_at):'— Non ancora'}</td>
+                <td style={{padding:'11px 14px',fontSize:12,color:'#888'}} title={cl.last_login_at?fmtDT(cl.last_login_at):''}>{(()=>{if(!cl.last_login_at)return '—';const gg=Math.floor((Date.now()-new Date(cl.last_login_at).getTime())/86400000);return gg<=0?'oggi':gg===1?'ieri':`${gg} gg fa`;})()}</td>
                 <td style={{padding:'11px 14px'}}>{cl.regulation_accepted?<span style={{color:GREEN}}>✓ Accettato</span>:<span style={{color:'#ccc'}}>— Non ancora</span>}</td>
                 <td style={{padding:'11px 14px'}}>{cl.is_active?<span style={{color:GREEN,fontWeight:500}}>● Attivo</span>:<span style={{color:'#999'}}>○ Disabilitato</span>}</td>
                 <td style={{padding:'11px 14px'}}>
@@ -2082,6 +2103,20 @@ export default function App() {
   });
   const [activeTab, setActiveTab] = useState('inbox');
 
+  // 📣 Banner adozione app (fase di lancio): quanti collaboratori attivi
+  // hanno fatto il primo accesso. Visibile su tutte le schermate finché
+  // non si arriva al 100%; la ✕ lo nasconde per la giornata.
+  const [adoz, setAdoz] = useState(null);
+  const [adozHidden, setAdozHidden] = useState(() => localStorage.getItem('adozBannerHide') === new Date().toDateString());
+  useEffect(() => {
+    if (!currentAdmin) return;
+    (async () => {
+      const c = await sb();
+      const { data } = await c.from('report_collaborators').select('id,pin_revealed,is_active');
+      if (data) { const att = data.filter(x => x.is_active); setAdoz({ fatti: att.filter(x => x.pin_revealed).length, tot: att.length }); }
+    })();
+  }, [currentAdmin]);
+
   const handleLogin = (admin) => {
     localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({
       id: admin.id, admin_name: admin.admin_name, is_super: !!admin.is_super, token: admin.token, savedAt: Date.now()
@@ -2174,7 +2209,15 @@ export default function App() {
   return (
     <div style={{display:'flex',height:'100vh',overflow:'hidden',fontFamily:'-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'}}>
       <Sidebar active={safeTab} onNav={setActiveTab} onLogout={handleLogout} adminName={currentAdmin.admin_name} isSuper={isSuper} />
-      <div style={{flex:1,overflow:'hidden'}}>
+      <div style={{flex:1,overflow:'hidden',display:'flex',flexDirection:'column'}}>
+        {adoz && adoz.tot > 0 && adoz.fatti < adoz.tot && !adozHidden && (
+          <div style={{background:'#fff8e6',borderBottom:'1px solid #eadfbf',padding:'8px 16px',display:'flex',alignItems:'center',gap:12,fontSize:13,color:'#7a5b0b',flexShrink:0}}>
+            <span>📣 Adozione app collaboratori: <strong>{adoz.fatti}/{adoz.tot}</strong> hanno fatto il primo accesso ({Math.round(adoz.fatti/adoz.tot*100)}%)</span>
+            {isSuper && <button onClick={() => setActiveTab('collaboratori')} style={{background:'none',border:'1px solid #d9c68a',borderRadius:6,padding:'3px 10px',cursor:'pointer',fontSize:12,color:'#7a5b0b',fontFamily:'inherit',fontWeight:600}}>vedi chi manca →</button>}
+            <button onClick={() => { localStorage.setItem('adozBannerHide', new Date().toDateString()); setAdozHidden(true); }} title="Nascondi per oggi" style={{marginLeft:'auto',background:'none',border:'none',cursor:'pointer',fontSize:14,color:'#b09a55',lineHeight:1}}>✕</button>
+          </div>
+        )}
+        <div style={{flex:1,overflow:'hidden'}}>
         {safeTab==='inbox'           && <InboxTab currentAdmin={currentAdmin} />}
         {safeTab==='spedisci'        && <SpedisciTab currentAdmin={currentAdmin} />}
         {safeTab==='clienti'         && <ClientiTab />}
@@ -2183,6 +2226,7 @@ export default function App() {
         {safeTab==='cronologia'      && isSuper && <CronologiaTab />}
         {safeTab==='cestino'         && isSuper && <CestinoTab currentAdmin={currentAdmin} />}
         {safeTab==='regolamento'     && isSuper && <RegolamentoTab />}
+        </div>
       </div>
     </div>
   );
