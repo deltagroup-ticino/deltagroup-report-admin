@@ -452,15 +452,17 @@ function TypeBadge({ type }) {
 }
 
 // ── APP NAME ──────────────────────────────────────────────────────
-function AppName({ dark = false }) {
+function AppName({ dark = false, logo = true }) {
   const c = dark ? GREEN : '#fff';
   const cs = dark ? '#555' : 'rgba(255,255,255,0.85)';
   return (
-    <span style={{display:'inline-flex',alignItems:'center',gap:7}}>
-      <svg width="18" height="18" viewBox="0 0 52 52" style={{flexShrink:0,display:'block'}} aria-hidden="true">
-        <rect width="52" height="52" rx="12" fill={GREEN}/>
-        <polygon points="26,12 44,41 8,41" fill="none" stroke="#fff" strokeWidth="4.5" strokeLinejoin="round" strokeLinecap="round"/>
-      </svg>
+    <span style={{display:'inline-flex',alignItems:'center',gap:logo?7:0}}>
+      {logo && (
+        <svg width="18" height="18" viewBox="0 0 52 52" style={{flexShrink:0,display:'block'}} aria-hidden="true">
+          <rect width="52" height="52" rx="12" fill={GREEN}/>
+          <polygon points="26,12 44,41 8,41" fill="none" stroke="#fff" strokeWidth="4.5" strokeLinejoin="round" strokeLinecap="round"/>
+        </svg>
+      )}
       <span style={{display:'inline-flex',alignItems:'baseline'}}>
         <span style={{fontSize:16,fontWeight:700,color:c,letterSpacing:0.5}}>DELTA</span>
         <span style={{fontSize:11,color:cs}}>group</span>
@@ -613,7 +615,7 @@ function AdminLogin({ onLogin }) {
             <rect width="52" height="52" rx="14" fill={GREEN}/>
             <polygon points="26,11 45,42 7,42" fill="none" stroke="white" strokeWidth="4" strokeLinejoin="round" strokeLinecap="round"/>
           </svg>
-          <AppName dark />
+          <AppName dark logo={false} />
           <div style={{fontSize:T.f.sm,color:T.c.textFaint,marginTop:6}}>Accesso amministratore</div>
         </div>
 
