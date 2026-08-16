@@ -730,7 +730,10 @@ function ReportRow({ report, isSelected, onClick }) {
       </div>
       <div style={{fontSize:T.f.sm,color:T.c.textMuted,marginBottom:6,fontWeight:isUnread?500:400}}>{report.client_name} · {report.address}</div>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6}}>
-        <TypeBadge type={report.report_type} />
+        <div style={{display:'flex',alignItems:'center',gap:6}}>
+          <TypeBadge type={report.report_type} />
+          {report.internal_notes && <span title="Contiene note per l'ufficio" style={{fontSize:11}}>🔒</span>}
+        </div>
         <div style={{fontSize:T.f.xs-1,color:T.c.textFaint}}>{fmtTime(report.submitted_at)}</div>
       </div>
       {report.is_late && <div style={{fontSize:T.f.xs-1,color:T.c.warningText,background:T.c.warningBg,padding:'2px 7px',borderRadius:4,marginTop:6,display:'inline-block',border:`1px solid ${T.c.warningBorder}`}}>Ricevuto in ritardo</div>}
@@ -1033,6 +1036,13 @@ function InboxTab({ currentAdmin }) {
                     <div style={{gridColumn:'1/-1',padding:'8px 12px',background:'#fcebeb',borderRadius:7,display:'flex',alignItems:'center',gap:6,marginTop:4}}>
                       <span style={{color:'#a32d2d',fontSize:14}}>⚠️</span>
                       <span style={{fontSize:12,color:'#a32d2d'}}>Orario di fine mancante — correggere prima di inviare al cliente</span>
+                    </div>
+                  )}
+                  {/* 🔒 Note interne del collaboratore: NON vanno nel PDF */}
+                  {selectedReport.internal_notes && (
+                    <div style={{gridColumn:'1/-1',padding:'10px 12px',background:'#fff8e6',border:'1px solid #eadfbf',borderRadius:7,marginTop:4}}>
+                      <div style={{fontSize:10,color:'#7a5b0b',fontWeight:600,marginBottom:3}}>🔒 NOTE PER L'UFFICIO (non nel PDF del cliente)</div>
+                      <div style={{fontSize:13,color:'#5a430a',whiteSpace:'pre-wrap'}}>{selectedReport.internal_notes}</div>
                     </div>
                   )}
                 </div>
