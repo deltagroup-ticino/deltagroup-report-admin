@@ -1534,6 +1534,7 @@ function CollaboratoriTab({ currentAdmin }) {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
+  const [adozOpen, setAdozOpen] = useState(false); // card Adozione: chiusa di default
 
   const load = async () => {
     setLoading(true);
@@ -1591,7 +1592,9 @@ function CollaboratoriTab({ currentAdmin }) {
       </div>
       {/* 📈 Adozione app (lancio): quanti hanno fatto il primo accesso,
           chi manca (da sollecitare, PIN alla mano) e l'onda dei primi
-          accessi — richiesta Paolo 15.08 */}
+          accessi — richiesta Paolo 15.08. Card COLLASSATA di default
+          (richiesta Paolo 16.08): l'intestazione con % resta sempre
+          visibile, il dettaglio si apre al click. */}
       {!loading && collabs.length>0 && (()=>{
         const att=collabs.filter(c=>c.is_active);
         const fatti=att.filter(c=>c.pin_revealed);
@@ -1599,14 +1602,19 @@ function CollaboratoriTab({ currentAdmin }) {
         const pct=att.length?Math.round(fatti.length/att.length*100):0;
         const recenti=fatti.filter(c=>c.pin_revealed_at).sort((a,b)=>new Date(b.pin_revealed_at)-new Date(a.pin_revealed_at)).slice(0,5);
         return <div style={{background:'#fff',border:'0.5px solid #e0e0e0',borderRadius:12,padding:'14px 16px',marginBottom:14}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,flexWrap:'wrap',gap:6}}>
-            <div style={{fontWeight:600,fontSize:14,color:T.c.text}}>📈 Adozione app</div>
+          <div onClick={()=>setAdozOpen(v=>!v)} style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:6,cursor:'pointer',userSelect:'none'}}>
+            <div style={{fontWeight:600,fontSize:14,color:T.c.text,display:'flex',alignItems:'center',gap:7}}>
+              <span style={{fontSize:11,color:'#999',display:'inline-block',transform:adozOpen?'rotate(90deg)':'none',transition:'transform 0.15s'}}>▶</span>
+              📈 Adozione app
+            </div>
             <div style={{fontSize:13,color:'#555'}}><strong>{fatti.length}/{att.length}</strong> primi accessi · {pct}%</div>
           </div>
-          <div style={{height:8,background:'#eee',borderRadius:4,overflow:'hidden',marginBottom:10}}><div style={{width:`${pct}%`,height:'100%',background:GREEN,transition:'width 0.4s'}}/></div>
-          {manc.length>0&&<div style={{fontSize:12,color:'#7a5b0b',lineHeight:1.7,marginBottom:recenti.length?6:0}}>⚪ Mai entrati ({manc.length}): {manc.map(c=>c.agent_name).join(', ')}</div>}
-          {recenti.length>0&&<div style={{fontSize:12,color:'#888',lineHeight:1.7}}>🕘 Ultimi primi accessi: {recenti.map(c=>`${c.agent_name} (${fmtDT(c.pin_revealed_at)})`).join(' · ')}</div>}
-          {manc.length===0&&<div style={{fontSize:12,color:GREEN,fontWeight:500}}>✓ Tutti i collaboratori attivi hanno attivato l'app.</div>}
+          {adozOpen && <div style={{marginTop:10}}>
+            <div style={{height:8,background:'#eee',borderRadius:4,overflow:'hidden',marginBottom:10}}><div style={{width:`${pct}%`,height:'100%',background:GREEN,transition:'width 0.4s'}}/></div>
+            {manc.length>0&&<div style={{fontSize:12,color:'#7a5b0b',lineHeight:1.7,marginBottom:recenti.length?6:0}}>⚪ Mai entrati ({manc.length}): {manc.map(c=>c.agent_name).join(', ')}</div>}
+            {recenti.length>0&&<div style={{fontSize:12,color:'#888',lineHeight:1.7}}>🕘 Ultimi primi accessi: {recenti.map(c=>`${c.agent_name} (${fmtDT(c.pin_revealed_at)})`).join(' · ')}</div>}
+            {manc.length===0&&<div style={{fontSize:12,color:GREEN,fontWeight:500}}>✓ Tutti i collaboratori attivi hanno attivato l'app.</div>}
+          </div>}
         </div>;
       })()}
       <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Cerca collaboratore…" style={{width:'100%',padding:'10px 13px',border:'1px solid #ddd',borderRadius:9,fontSize:14,marginBottom:14,boxSizing:'border-box',fontFamily:'inherit'}} />
