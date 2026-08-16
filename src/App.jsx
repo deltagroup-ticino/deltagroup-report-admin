@@ -1539,15 +1539,22 @@ function CollaboratoriTab({ currentAdmin }) {
   const load = async () => {
     setLoading(true);
     const c = await sb();
-    const {data} = await c.from('report_collaborators').select('*').order('agent_name');
-    if (data) setCollabs(data);
+    // Elenco via funzione con token (fase B: la tabella è chiusa all'anon);
+    // fallback alla query diretta finché lo script SQL non è eseguito
+    const { data: rows, error: rpcErr } = await c.rpc('admin_list_collaborators', { p_token: currentAdmin.token });
+    if (!rpcErr && rows) setCollabs(rows);
+    else {
+      const {data} = await c.from('report_collaborators').select('*').order('agent_name');
+      if (data) setCollabs(data);
+    }
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
 
   const toggleActive = async (id, current) => {
     const c = await sb();
-    await c.from('report_collaborators').update({is_active:!current,updated_at:new Date().toISOString()}).eq('id',id);
+    const { error: rpcErr } = await c.rpc('admin_set_collab_active', { p_token: currentAdmin.token, p_collab_id: id, p_is_active: !current });
+    if (rpcErr) await c.from('report_collaborators').update({is_active:!current,updated_at:new Date().toISOString()}).eq('id',id);
     setCollabs(prev => prev.map(cl => cl.id===id ? {...cl,is_active:!current} : cl));
   };
 
@@ -1559,8 +1566,17 @@ function CollaboratoriTab({ currentAdmin }) {
     });
     if (!ok) return;
     const c = await sb();
-    const {data:pin} = await c.rpc('generate_random_pin');
-    await c.from('report_collaborators').update({pin,pin_revealed:false,pin_revealed_at:null,regulation_accepted:false,regulation_accepted_at:null,regulation_version:0,updated_at:new Date().toISOString()}).eq('id',id);
+    // Reset via funzione con token (genera e scrive il PIN lato DB);
+    // fallback al vecchio flusso finché lo script fase B non è eseguito
+    let pin = null;
+    const { data: newPin, error: rpcErr } = await c.rpc('admin_reset_collab_pin', { p_token: currentAdmin.token, p_collab_id: id });
+    if (!rpcErr && newPin) pin = newPin;
+    else {
+      const {data:genPin} = await c.rpc('generate_random_pin');
+      pin = genPin;
+      await c.from('report_collaborators').update({pin,pin_revealed:false,pin_revealed_at:null,regulation_accepted:false,regulation_accepted_at:null,regulation_version:0,updated_at:new Date().toISOString()}).eq('id',id);
+    }
+    if (!pin) { toast.error('Reset PIN non riuscito.'); return; }
     setCollabs(prev => prev.map(cl => cl.id===id ? {...cl,pin,pin_revealed:false,regulation_accepted:false} : cl));
     await alertModal({ title: `Nuovo PIN per ${name}`, message: `PIN: ${pin}\n\nComunicalo al collaboratore: lo userà al primo accesso.`, tone: 'success' });
   };
@@ -2128,6 +2144,9 @@ export default function App() {
     if (!currentAdmin) return;
     (async () => {
       const c = await sb();
+      // Statistiche via funzione con token (fase B); fallback diretto
+      const { data: st, error: rpcErr } = await c.rpc('admin_adoption_stats', { p_token: currentAdmin.token });
+      if (!rpcErr && st && st[0]) { setAdoz({ fatti: st[0].fatti, tot: st[0].tot }); return; }
       const { data } = await c.from('report_collaborators').select('id,pin_revealed,is_active');
       if (data) { const att = data.filter(x => x.is_active); setAdoz({ fatti: att.filter(x => x.pin_revealed).length, tot: att.length }); }
     })();
