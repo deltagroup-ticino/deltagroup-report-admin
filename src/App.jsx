@@ -752,6 +752,12 @@ function InboxTab({ currentAdmin }) {
   const [loading, setLoading] = useState(true);
   const [loadingDay, setLoadingDay] = useState(false);
   const [searchDate, setSearchDate] = useState('');
+  // Ricerca globale (richiesta Paolo 20.08): numero, cliente, collaboratore
+  // o luogo su TUTTO lo storico (nessun limite 12 mesi), con filtro stato.
+  const [q, setQ] = useState('');
+  const [qStatus, setQStatus] = useState('all');
+  const [qResults, setQResults] = useState(null);
+  const [qLoading, setQLoading] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState({});
   const [saving, setSaving] = useState(false);
@@ -807,6 +813,43 @@ function InboxTab({ currentAdmin }) {
       if (data) { const m = {}; data.forEach(cl => { m[cl.name.toLowerCase()] = cl.email; }); setClientsMap(m); }
     });
   }, []);
+
+  const searching = q.trim().length >= 2 || qStatus !== 'all';
+  useEffect(() => {
+    if (!searching) { setQResults(null); return; }
+    let alive = true;
+    const t = setTimeout(async () => {
+      setQLoading(true);
+      try {
+        const c = await sb();
+        const txt = q.trim().replace(/[,%()]/g, ' ').trim();
+        const run = (conNumero) => {
+          let query = c.from('dr_reports').select('id,report_number,service_date,client_name,location,submitted_by_name,status,is_late').is('deleted_at', null);
+          if (txt.length >= 2) {
+            const parts = [`client_name.ilike.%${txt}%`, `submitted_by_name.ilike.%${txt}%`, `location.ilike.%${txt}%`];
+            if (conNumero) parts.unshift(`report_number.ilike.%${txt}%`);
+            query = query.or(parts.join(','));
+          }
+          if (qStatus !== 'all') query = query.eq('status', qStatus);
+          return query.order('service_date', { ascending: false }).order('submitted_at', { ascending: false }).limit(200);
+        };
+        let { data, error } = await run(true);
+        // report_number numerico su DB vecchi: ilike non applicabile → senza
+        if (error) ({ data, error } = await run(false));
+        if (alive) setQResults(error ? [] : (data || []));
+      } catch { if (alive) setQResults([]); }
+      if (alive) setQLoading(false);
+    }, 350);
+    return () => { alive = false; clearTimeout(t); };
+  }, [q, qStatus]); // eslint-disable-line
+
+  const apriRisultato = async (r) => {
+    const c = await sb();
+    const { data } = await c.from('dr_reports').select('*').eq('id', r.id).is('deleted_at', null).single();
+    if (!data) return;
+    await loadDay(data.service_date);
+    openReport(data);
+  };
 
   const loadDay = async (date) => {
     setSelectedDay(date); setSelectedReport(null); setEditMode(false); setLoadingDay(true);
@@ -942,10 +985,38 @@ function InboxTab({ currentAdmin }) {
         <div style={{padding:'14px 14px 10px',borderBottom:'1px solid #e8e8e8'}}>
           <div style={{fontWeight:600,fontSize:T.f.lg,marginBottom:12,display:'flex',alignItems:'center',gap:8,color:T.c.text}}><I.inbox size={18} /> Inbox</div>
           <input type="date" value={searchDate} onChange={e=>setSearchDate(e.target.value)} style={{width:'100%',padding:'8px 10px',border:'1px solid #ddd',borderRadius:7,fontSize:13,boxSizing:'border-box',fontFamily:'inherit'}} />
+          {/* Ricerca globale: tutto lo storico, non solo 12 mesi */}
+          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="🔍 n°, cliente, collaboratore, luogo…" style={{width:'100%',padding:'8px 10px',border:`1px solid ${q?'#1a5632':'#ddd'}`,borderRadius:7,fontSize:13,boxSizing:'border-box',fontFamily:'inherit',marginTop:8,outline:'none'}} />
+          <div style={{display:'flex',gap:5,marginTop:8,flexWrap:'wrap'}}>
+            {[['all','Tutti'],['submitted','Da leggere'],['read','Letti'],['sent_to_client','Inviati']].map(([v,l])=>(
+              <button key={v} onClick={()=>setQStatus(v)} style={{border:'none',borderRadius:6,padding:'4px 9px',fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'inherit',background:qStatus===v?'#1a5632':'#eee',color:qStatus===v?'#fff':'#555'}}>{l}</button>
+            ))}
+            {(q||qStatus!=='all')&&<button onClick={()=>{setQ('');setQStatus('all');}} style={{border:'none',borderRadius:6,padding:'4px 9px',fontSize:11,cursor:'pointer',fontFamily:'inherit',background:'transparent',color:'#999',textDecoration:'underline'}}>✕ annulla</button>}
+          </div>
         </div>
         <div style={{flex:1,overflowY:'auto'}}>
-          {loading && <div style={{padding:20,textAlign:'center',color:'#888',fontSize:13}}>Caricamento…</div>}
-          {(() => {
+          {/* Modalità ricerca: risultati al posto dell'elenco giorni */}
+          {searching && (
+            <div>
+              <div style={{padding:'8px 14px',fontSize:11,color:'#888',borderBottom:'1px solid #f0f0f0'}}>{qLoading?'Cerco in tutto lo storico…':`${(qResults||[]).length} risultat${(qResults||[]).length===1?'o':'i'}${(qResults||[]).length===200?' (primi 200: affina la ricerca)':''}`}</div>
+              {(qResults||[]).map(r => (
+                <div key={r.id} onClick={()=>apriRisultato(r)} style={{padding:'9px 14px',borderBottom:'1px solid #f0f0f0',cursor:'pointer',background:selectedReport?.id===r.id?'#eef5ef':'transparent'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',gap:6,fontSize:12}}>
+                    <span style={{fontWeight:600,color:'#222'}}>#{r.report_number}</span>
+                    <span style={{color:'#888',whiteSpace:'nowrap'}}>{fromISO(r.service_date)}</span>
+                  </div>
+                  <div style={{fontSize:12,color:'#444',marginTop:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.client_name||'—'}{r.location?` · ${r.location}`:''}</div>
+                  <div style={{fontSize:11,color:'#999',marginTop:1,display:'flex',justifyContent:'space-between',gap:6}}>
+                    <span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.submitted_by_name||''}</span>
+                    <span style={{color:r.status==='sent_to_client'?'#1a7f37':r.status==='read'?'#9a6700':'#c62828',fontWeight:600,whiteSpace:'nowrap'}}>{r.status==='sent_to_client'?'inviato':r.status==='read'?'letto':'da leggere'}</span>
+                  </div>
+                </div>
+              ))}
+              {!qLoading&&(qResults||[]).length===0&&<div style={{padding:30,textAlign:'center',color:'#aaa',fontSize:13}}>Nessun risultato</div>}
+            </div>
+          )}
+          {!searching && loading && <div style={{padding:20,textAlign:'center',color:'#888',fontSize:13}}>Caricamento…</div>}
+          {!searching && (() => {
             const out = [];
             let lastKey = null;
             // first pass: count days per month
@@ -966,7 +1037,7 @@ function InboxTab({ currentAdmin }) {
             });
             return out;
           })()}
-          {!loading && filteredDays.length===0 && <div style={{padding:30,textAlign:'center',color:T.c.textFaint,fontSize:T.f.md}}>Nessun dato</div>}
+          {!searching && !loading && filteredDays.length===0 && <div style={{padding:30,textAlign:'center',color:T.c.textFaint,fontSize:T.f.md}}>Nessun dato</div>}
         </div>
       </div>
 
